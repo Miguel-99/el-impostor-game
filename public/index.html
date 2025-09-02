@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Unirse al Juego</title>
+</head>
+
+<body>
+  <h1>Unirse al Juego</h1>
+  <form id="joinForm">
+    <input type="text" id="name" placeholder="Tu nombre" required />
+    <button type="submit">Unirse</button>
+  </form>
+
+  <form id="wordForm">
+    <input type="text" id="word" placeholder="Ingresa una palabra" required />
+    <button type="submit">Agregar palabra</button>
+  </form>
+
+  <button id="role">Consultar rol</button>
+
+  <script>
+
+    // Al cargar la página, revisa si hay nombre guardado en localStorage
+    window.addEventListener("DOMContentLoaded", () => {
+      const savedName = localStorage.getItem("playerName");
+      if (savedName) {
+        document.getElementById("name").value = savedName;
+      }
+    });
+
+    document.getElementById("joinForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("name").value;
+
+      // Guarda el nombre en localStorage para próximas veces
+      localStorage.setItem("playerName", name);
+
+      const res = await fetch("/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      });
+
+      const data = await res.json();
+      alert("Te uniste al juego con nombre: " + data.name);
+    });
+
+    document.getElementById("wordForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("name").value;
+      const word = document.getElementById("word").value;
+
+      const res = await fetch("/add-word", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, word })
+      });
+
+      const data = await res.json();
+      alert("Enviaste correctamente la palabra: " + data.word);
+    });
+
+    document.getElementById("role").addEventListener("click", async () => {
+      const playerName = localStorage.getItem("playerName");
+      const name = prompt("Ingrese el nombre del jugador:", playerName);
+      const res = await fetch("/state/" + name, { method: "GET" });
+      const playerState = await res.json();
+      alert("Estado del jugador: " + JSON.stringify(playerState));
+    });
+  </script>
+</body>
+
+</html>
