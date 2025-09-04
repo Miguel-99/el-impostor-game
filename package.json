@@ -1,15 +1,32 @@
 {
   "name": "el-impostor",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.1.0",
+  "description": "Un juego multijugador donde los jugadores deben identificar al impostor",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "echo \"No hay tests configurados aún\" && exit 0",
+    "lint": "echo \"No hay linter configurado aún\" && exit 0"
   },
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "game",
+    "multiplayer",
+    "impostor",
+    "party-game",
+    "express",
+    "nodejs"
+  ],
+  "author": "Tu Nombre",
+  "license": "MIT",
   "dependencies": {
-    "express": "5.1.0"
+    "express": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tu-usuario/el-impostor.git"
   }
 }

@@ -3,119 +3,250 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Host del Juego</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>El Impostor - Host</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-  <form id="joinForm">
-    <input type="text" id="name" placeholder="Tu nombre" required />
-    <button type="submit">Unirse</button>
-  </form>
+  <div class="container">
+    <h1>🎮 El Impostor - Host</h1>
+    <p class="text-center mb-20">Panel de control del juego</p>
 
-  <form id="wordForm">
-    <input type="text" id="word" placeholder="Ingresa una palabra" required />
-    <button type="submit">Agregar palabra</button>
-  </form>
+    <!-- Player Management -->
+    <div class="form-group">
+      <h2>👥 Gestión de Jugadores</h2>
+      
+      <form id="joinForm">
+        <div class="form-group">
+          <label for="name">Agregar jugador:</label>
+          <input type="text" id="name" name="name" placeholder="Nombre del jugador" required />
+        </div>
+        <button type="submit">➕ Agregar jugador</button>
+      </form>
 
-  <h1>Host del Juego</h1>
-  <button id="refresh">Ver jugadores</button>
-  <ul id="players"></ul>
-  
-  <button id="start">Iniciar partida</button>
-  <button id="role">Consultar palabra</button>
-  <button id="reset">Borrar jugadores</button>
-  <button id="reset-words">Borrar palabras</button>
-  <h2 id="start-player" style="display: none;">Comienza la partida el jugador: </h2>
+      <form id="wordForm">
+        <div class="form-group">
+          <label for="word">Agregar palabra para jugador actual:</label>
+          <input type="text" id="word" name="word" placeholder="Palabra secreta" required />
+        </div>
+        <button type="submit" class="btn-success">📝 Agregar palabra</button>
+      </form>
+    </div>
+
+    <!-- Players List -->
+    <div class="form-group">
+      <div class="flex justify-between align-center">
+        <h2>📋 Lista de Jugadores</h2>
+        <button id="refresh" class="btn-info">🔄 Actualizar</button>
+      </div>
+      <ul id="players"></ul>
+    </div>
+
+    <!-- Game Controls -->
+    <div class="form-group">
+      <h2>🎯 Control del Juego</h2>
+      <div class="text-center">
+        <button id="start" class="btn-success">🚀 Iniciar partida</button>
+        <button id="role" class="btn-warning">🔍 Consultar rol</button>
+        <button id="status" class="btn-info">📊 Estado del juego</button>
+      </div>
+    </div>
+
+    <!-- Reset Controls -->
+    <div class="form-group">
+      <h2>🔄 Reiniciar</h2>
+      <div class="text-center">
+        <button id="reset-words" class="btn-warning">🗑️ Borrar palabras</button>
+        <button id="reset" class="btn-danger">💥 Reiniciar todo</button>
+      </div>
+    </div>
+
+    <!-- Game Status -->
+    <div id="gameStatus" class="game-status hidden">
+      <h3>📊 Estado del juego:</h3>
+      <div id="statusContent"></div>
+    </div>
+
+    <!-- Starter Player Display -->
+    <div id="starterPlayerDisplay" class="message info hidden">
+      <h3 id="starterPlayerText"></h3>
+    </div>
+
+    <!-- Messages -->
+    <div id="messages"></div>
+  </div>
+
+  <script src="game-client.js"></script>
   <script>
-    async function loadPlayers() {
-      const res = await fetch("/players");
-      const players = await res.json();
+    // Custom message display for better UX
+    window.showCustomMessage = function(message, type = 'info') {
+      const messagesContainer = document.getElementById('messages');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${type}`;
+      messageDiv.textContent = message;
+      
+      messagesContainer.appendChild(messageDiv);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        if (messageDiv.parentNode) {
+          messageDiv.parentNode.removeChild(messageDiv);
+        }
+      }, 5000);
+    };
 
-      const list = document.getElementById("players");
-      list.innerHTML = "";
-      players.forEach(p => {
-        const li = document.createElement("li");
-        li.textContent = `${p.name} (${p.word ? '✅': '❌'})`;
-        list.appendChild(li);
-      });
+    // Host-specific functionality
+    class HostController {
+      constructor() {
+        this.setupHostFeatures();
+        this.loadPlayers(); // Load players on page load
+      }
+
+      async loadPlayers() {
+        try {
+          const players = await gameClient.getPlayers();
+          this.displayPlayers(players);
+        } catch (error) {
+          console.error('Error loading players:', error);
+        }
+      }
+
+      displayPlayers(players) {
+        const list = document.getElementById("players");
+        list.innerHTML = "";
+        
+        if (players.length === 0) {
+          const li = document.createElement("li");
+          li.textContent = "No hay jugadores en el juego";
+          li.style.fontStyle = "italic";
+          li.style.color = "#666";
+          list.appendChild(li);
+          return;
+        }
+
+        players.forEach(player => {
+          const li = document.createElement("li");
+          li.innerHTML = `
+            <span>${player.name}</span>
+            <span class="status-indicator ${player.hasWord ? 'has-word' : 'no-word'}">
+              ${player.hasWord ? '✅ Tiene palabra' : '❌ Sin palabra'}
+            </span>
+          `;
+          list.appendChild(li);
+        });
+      }
+
+      async handleStartGame() {
+        try {
+          const result = await gameClient.startGame();
+          gameClient.showSuccess(`🎉 ${result.message}`);
+          
+          // Show starter player
+          const starterDisplay = document.getElementById('starterPlayerDisplay');
+          const starterText = document.getElementById('starterPlayerText');
+          starterText.textContent = `🎯 Comienza la partida: ${result.starterPlayer}`;
+          starterDisplay.classList.remove('hidden');
+          
+          // Refresh players list
+          await this.loadPlayers();
+          
+        } catch (error) {
+          gameClient.showError(error);
+        }
+      }
+
+      async handleGameStatus() {
+        try {
+          const status = await gameClient.getGameStatus();
+          const statusDiv = document.getElementById('gameStatus');
+          const contentDiv = document.getElementById('statusContent');
+          
+          contentDiv.innerHTML = `
+            <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
+            <p><strong>Jugadores:</strong> ${status.playerCount}</p>
+            <p><strong>Palabras:</strong> ${status.wordsCount}</p>
+            ${status.starterPlayer ? `<p><strong>Jugador inicial:</strong> ${status.starterPlayer}</p>` : ''}
+            ${status.hasCommonWord ? '<p><strong>Palabra común:</strong> ✅ Seleccionada</p>' : '<p><strong>Palabra común:</strong> ❌ No seleccionada</p>'}
+          `;
+          
+          statusDiv.classList.remove('hidden');
+          if (status.started) {
+            statusDiv.classList.add('started');
+          }
+        } catch (error) {
+          gameClient.showError(error);
+        }
+      }
+
+      async handleReset() {
+        if (!confirm('¿Estás seguro de que quieres reiniciar todo el juego? Se perderán todos los jugadores y palabras.')) {
+          return;
+        }
+
+        try {
+          await gameClient.resetGame();
+          gameClient.showSuccess('🔄 Juego reiniciado completamente');
+          
+          // Hide displays
+          document.getElementById('gameStatus').classList.add('hidden');
+          document.getElementById('starterPlayerDisplay').classList.add('hidden');
+          
+          // Refresh players list
+          await this.loadPlayers();
+        } catch (error) {
+          gameClient.showError(error);
+        }
+      }
+
+      async handleResetWords() {
+        if (!confirm('¿Estás seguro de que quieres borrar todas las palabras? El juego se reiniciará pero los jugadores permanecerán.')) {
+          return;
+        }
+
+        try {
+          await gameClient.resetWords();
+          gameClient.showSuccess('🗑️ Palabras eliminadas y juego reiniciado');
+          
+          // Hide displays
+          document.getElementById('gameStatus').classList.add('hidden');
+          document.getElementById('starterPlayerDisplay').classList.add('hidden');
+          
+          // Refresh players list
+          await this.loadPlayers();
+        } catch (error) {
+          gameClient.showError(error);
+        }
+      }
+
+      setupHostFeatures() {
+        // Setup host-specific buttons
+        gameClient.setupButton('refresh', () => this.loadPlayers());
+        gameClient.setupButton('start', () => this.handleStartGame());
+        gameClient.setupButton('status', () => this.handleGameStatus());
+        gameClient.setupButton('reset', () => this.handleReset());
+        gameClient.setupButton('reset-words', () => this.handleResetWords());
+
+        // Override word form handler to refresh players after adding word
+        const originalWordHandler = gameClient.handleWordForm.bind(gameClient);
+        gameClient.handleWordForm = async (e, form) => {
+          await originalWordHandler(e, form);
+          await this.loadPlayers(); // Refresh players list
+        };
+
+        // Override join form handler to refresh players after joining
+        const originalJoinHandler = gameClient.handleJoinForm.bind(gameClient);
+        gameClient.handleJoinForm = async (e, form) => {
+          await originalJoinHandler(e, form);
+          await this.loadPlayers(); // Refresh players list
+        };
+      }
     }
 
-    window.addEventListener("DOMContentLoaded", () => {
-      const savedName = localStorage.getItem("playerName");
-      if (savedName) {
-        document.getElementById("name").value = savedName;
-      }
+    // Initialize host controller when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      window.hostController = new HostController();
     });
-
-    document.getElementById("refresh").addEventListener("click", loadPlayers);
-
-    document.getElementById("start").addEventListener("click", async () => {
-      const res = await fetch("/start", { method: "POST" });
-      const data = await res.json();
-      alert("Partida iniciada");
-
-      let startPlayer = document.getElementById("start-player")
-      startPlayer.style.display = "block";
-      startPlayer.textContent = "Comienza la partida el jugador: " + data.starterPlayer;
-    });
-
-    document.getElementById("role").addEventListener("click", async () => {
-      const playerName = localStorage.getItem("playerName");
-      const name = prompt("Ingrese el nombre del jugador:", playerName);
-      const res = await fetch("/state/" + name, { method: "GET" });
-      const playerState = await res.json();
-
-      if (playerState.word) alert(`La palabra es: "${playerState.word}"`);
-      else alert("Eres el impostor");
-    });
-
-    document.getElementById("reset").addEventListener("click", async () => {
-      const res = await fetch("/remove-players" + name, { method: "GET" });
-      if (res.ok) alert("Jugadores eliminados de la partida correctamente");
-    });
-
-    document.getElementById("reset-words").addEventListener("click", async () => {
-      const res = await fetch("/remove-words" + name, { method: "GET" });
-      if (res.ok) alert("Palabras actuales eliminadas correctamente");
-    });
-
-    document.getElementById("joinForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const name = document.getElementById("name").value;
-
-      // Guarda el nombre en localStorage para próximas veces
-      localStorage.setItem("playerName", name);
-      try {
-        const res = await fetch("/join", { method: "POST", body: JSON.stringify({ name }), headers: { "Content-Type": "application/json" } });
-        const data = await res.json();
-        console.log("res: ", res)
-        console.log("data: ", data)
-        if (res.ok) {
-          alert("Te uniste al juego con nombre: " + data.name);
-        } else {
-          alert(data.error)
-        }
-      } catch (error) {
-        alert("Error al unirse al juego: " + error.message);
-      }
-
-    });
-
-    document.getElementById("wordForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const name = document.getElementById("name").value;
-      const word = document.getElementById("word").value;
-
-      const res = await fetch("/add-word", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, word })
-      });
-
-      const data = await res.json();
-      alert("Enviaste correctamente la palabra: " + data.word);
-    });
-
   </script>
 </body>
 

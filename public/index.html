@@ -3,72 +3,108 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Unirse al Juego</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>El Impostor - Jugador</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-  <h1>Unirse al Juego</h1>
-  <form id="joinForm">
-    <input type="text" id="name" placeholder="Tu nombre" required />
-    <button type="submit">Unirse</button>
-  </form>
+  <div class="container">
+    <h1>🎭 El Impostor</h1>
+    <p class="text-center mb-20">Únete al juego y descubre si eres el impostor</p>
 
-  <form id="wordForm">
-    <input type="text" id="word" placeholder="Ingresa una palabra" required />
-    <button type="submit">Agregar palabra</button>
-  </form>
+    <form id="joinForm">
+      <div class="form-group">
+        <label for="name">Tu nombre:</label>
+        <input type="text" id="name" name="name" placeholder="Ingresa tu nombre" required />
+      </div>
+      <button type="submit">🚀 Unirse al juego</button>
+    </form>
 
-  <button id="role">Consultar rol</button>
+    <form id="wordForm">
+      <div class="form-group">
+        <label for="word">Tu palabra secreta:</label>
+        <input type="text" id="word" name="word" placeholder="Ingresa una palabra" required />
+      </div>
+      <button type="submit" class="btn-success">📝 Agregar palabra</button>
+    </form>
 
+    <div class="text-center mt-20">
+      <button id="role" class="btn-warning">🔍 Consultar mi rol</button>
+      <button id="status" class="btn-info">📊 Estado del juego</button>
+    </div>
+
+    <div id="gameStatus" class="game-status hidden">
+      <h3>Estado del juego:</h3>
+      <div id="statusContent"></div>
+    </div>
+
+    <div id="messages"></div>
+  </div>
+
+  <script src="game-client.js"></script>
   <script>
+    // Custom message display for better UX
+    window.showCustomMessage = function(message, type = 'info') {
+      const messagesContainer = document.getElementById('messages');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${type}`;
+      messageDiv.textContent = message;
+      
+      messagesContainer.appendChild(messageDiv);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        if (messageDiv.parentNode) {
+          messageDiv.parentNode.removeChild(messageDiv);
+        }
+      }, 5000);
+    };
 
-    // Al cargar la página, revisa si hay nombre guardado en localStorage
-    window.addEventListener("DOMContentLoaded", () => {
-      const savedName = localStorage.getItem("playerName");
-      if (savedName) {
-        document.getElementById("name").value = savedName;
+    // Additional functionality specific to player page
+    gameClient.setupButton('status', async () => {
+      const status = await gameClient.getGameStatus();
+      const statusDiv = document.getElementById('gameStatus');
+      const contentDiv = document.getElementById('statusContent');
+      
+      contentDiv.innerHTML = `
+        <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
+        <p><strong>Jugadores:</strong> ${status.playerCount}</p>
+        <p><strong>Palabras:</strong> ${status.wordsCount}</p>
+        ${status.starterPlayer ? `<p><strong>Jugador inicial:</strong> ${status.starterPlayer}</p>` : ''}
+      `;
+      
+      statusDiv.classList.remove('hidden');
+      if (status.started) {
+        statusDiv.classList.add('started');
       }
     });
 
-    document.getElementById("joinForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const name = document.getElementById("name").value;
+    // Enhanced role check with better messaging
+    gameClient.handleRoleCheck = async function() {
+      let name = this.playerName;
+      
+      if (!name) {
+        name = prompt("Ingrese el nombre del jugador:");
+        if (!name) return;
+      }
 
-      // Guarda el nombre en localStorage para próximas veces
-      localStorage.setItem("playerName", name);
-
-      const res = await fetch("/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name })
-      });
-
-      const data = await res.json();
-      alert("Te uniste al juego con nombre: " + data.name);
-    });
-
-    document.getElementById("wordForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const name = document.getElementById("name").value;
-      const word = document.getElementById("word").value;
-
-      const res = await fetch("/add-word", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, word })
-      });
-
-      const data = await res.json();
-      alert("Enviaste correctamente la palabra: " + data.word);
-    });
-
-    document.getElementById("role").addEventListener("click", async () => {
-      const playerName = localStorage.getItem("playerName");
-      const name = prompt("Ingrese el nombre del jugador:", playerName);
-      const res = await fetch("/state/" + name, { method: "GET" });
-      const playerState = await res.json();
-      alert("Estado del jugador: " + JSON.stringify(playerState));
-    });
+      try {
+        const playerState = await this.getPlayerState(name);
+        
+        if (playerState.role === 'impostor') {
+          this.showMessage("🎭 ¡Eres el IMPOSTOR! Tu objetivo es pasar desapercibido.", 'warning');
+        } else {
+          this.showMessage(`📝 Eres un jugador normal. Tu palabra es: "${playerState.word}"`, 'success');
+        }
+      } catch (error) {
+        if (error.message.includes('no ha comenzado')) {
+          this.showMessage('⏳ La partida aún no ha comenzado. Espera a que el host la inicie.', 'info');
+        } else {
+          throw error;
+        }
+      }
+    };
   </script>
 </body>
 
