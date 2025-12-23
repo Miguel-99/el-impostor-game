@@ -11,32 +11,41 @@
 <body>
   <div class="container">
     <h1>🎭 El Impostor</h1>
-    <p class="text-center mb-20">Únete al juego y descubre si eres el impostor</p>
 
-    <form id="joinForm">
-      <div class="form-group">
-        <label for="name">Tu nombre:</label>
-        <input type="text" id="name" name="name" placeholder="Ingresa tu nombre" required />
-      </div>
-      <button type="submit">🚀 Unirse al juego</button>
-    </form>
-
-    <form id="wordForm">
-      <div class="form-group">
-        <label for="word">Tu palabra secreta:</label>
-        <input type="text" id="word" name="word" placeholder="Ingresa una palabra" required />
-      </div>
-      <button type="submit" class="btn-success">📝 Agregar palabra</button>
-    </form>
-
-    <div class="text-center mt-20">
-      <button id="role" class="btn-warning">🔍 Consultar mi rol</button>
-      <button id="status" class="btn-info">📊 Estado del juego</button>
+    <div id="join-view">
+      <p class="text-center mb-20">Únete al juego y descubre si eres el impostor</p>
+      <form id="joinForm">
+        <div class="form-group">
+          <label for="name">Tu nombre:</label>
+          <input type="text" id="name" name="name" placeholder="Ingresa tu nombre" required />
+        </div>
+        <button type="submit">🚀 Unirse al juego</button>
+      </form>
     </div>
 
-    <div id="gameStatus" class="game-status hidden">
-      <h3>Estado del juego:</h3>
-      <div id="statusContent"></div>
+    <div id="game-view" class="hidden">
+      <div class="player-header">
+        <p>Bienvenido, <strong id="display-name"></strong></p>
+        <button id="leave-btn" class="btn-danger btn-sm">🚪 Salir de la partida</button>
+      </div>
+
+      <form id="wordForm">
+        <div class="form-group">
+          <label for="word">Tu palabra secreta:</label>
+          <input type="text" id="word" name="word" placeholder="Ingresa una palabra" required />
+        </div>
+        <button type="submit" class="btn-success">📝 Agregar palabra</button>
+      </form>
+
+      <div class="text-center mt-20">
+        <button id="role" class="btn-warning">🔍 Consultar mi rol</button>
+        <button id="status" class="btn-info">📊 Estado del juego</button>
+      </div>
+
+      <div id="gameStatus" class="game-status hidden">
+        <h3>Estado del juego:</h3>
+        <div id="statusContent"></div>
+      </div>
     </div>
 
     <div id="messages"></div>
@@ -45,6 +54,38 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="game-client.js"></script>
   <script>
+    // UI State Management
+    function updateUIState(state, name) {
+      const joinView = document.getElementById('join-view');
+      const gameView = document.getElementById('game-view');
+      const displayName = document.getElementById('display-name');
+
+      if (state === 'joined') {
+        joinView.classList.add('hidden');
+        gameView.classList.remove('hidden');
+        displayName.textContent = name;
+      } else {
+        joinView.classList.remove('hidden');
+        gameView.classList.add('hidden');
+        displayName.textContent = '';
+      }
+    }
+
+    // Initialize state change handler
+    gameClient.onStateChange = (state, name) => {
+      updateUIState(state, name);
+    };
+
+    // Check initial state
+    if (gameClient.playerName) {
+      // Re-join automatically if name exists (or let them join manually)
+      // For now, let's just update the UI if they were already "joined" in localstorage logic
+      // But actually, gameClient.isJoined starts false.
+      // We should probably check if they want to rejoin or just show join screen.
+      // For better UX, let's pre-fill the name but stay on join view.
+      document.getElementById('name').value = gameClient.playerName;
+    }
+
     // Custom message display for better UX
     window.showCustomMessage = function (message, type = 'info') {
       const messagesContainer = document.getElementById('messages');
@@ -81,13 +122,19 @@
       }
     });
 
+    gameClient.setupButton('leave-btn', async () => {
+      if (confirm('¿Estás seguro de que quieres salir de la partida?')) {
+        await gameClient.leaveGame();
+      }
+    });
+
     // Enhanced role check with better messaging
     gameClient.handleRoleCheck = async function () {
       let name = this.playerName;
 
       if (!name) {
-        name = prompt("Ingrese el nombre del jugador:");
-        if (!name) return;
+        this.showMessage('Debes unirte al juego primero', 'error');
+        return;
       }
 
       try {
@@ -122,13 +169,15 @@
         <p><strong>Jugadores:</strong> ${result.totalPlayers}</p>
         <p><strong>Jugador inicial:</strong> ${result.starterPlayer}</p>
       `;
-      statusDiv.classList.add('started', 'visible'); // Use a generic class for visibility if needed
+      statusDiv.classList.add('started', 'visible');
       statusDiv.classList.remove('hidden');
     });
 
     window.addEventListener('game:reset', () => {
       document.getElementById('gameStatus').classList.add('hidden');
       document.getElementById('gameStatus').classList.remove('started');
+      // If the game is reset, maybe we should also reset the player "joined" state?
+      // For now, let's just keep them joined unless the server clears them.
     });
   </script>
 </body>

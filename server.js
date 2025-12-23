@@ -39,9 +39,27 @@ class GameState {
       name: trimmedName,
       word: null
     };
-    
+
     this.players.push(newPlayer);
     return newPlayer;
+  }
+
+  removePlayer(name) {
+    if (!name) return;
+    const trimmedName = name.trim();
+    const index = this.players.findIndex(p => p.name === trimmedName);
+    if (index !== -1) {
+      const removedPlayer = this.players.splice(index, 1)[0];
+      // If the player who left had a word, remove it from the words list
+      if (removedPlayer.word) {
+        const wordIndex = this.words.indexOf(removedPlayer.word);
+        if (wordIndex !== -1) {
+          this.words.splice(wordIndex, 1);
+        }
+      }
+      return true;
+    }
+    return false;
   }
 
   addWord(name, word) {
@@ -51,7 +69,7 @@ class GameState {
 
     const trimmedName = name.trim();
     const trimmedWord = word.trim();
-    
+
     if (trimmedWord === '') {
       throw new Error('La palabra no puede estar vacía');
     }
@@ -67,7 +85,7 @@ class GameState {
 
     this.words.push(trimmedWord);
     player.word = trimmedWord;
-    
+
     return { word: trimmedWord };
   }
 
@@ -115,7 +133,7 @@ class GameState {
 
     const trimmedName = name.trim();
     const player = this.players.find(p => p.name === trimmedName);
-    
+
     if (!player) {
       throw new Error('Jugador no encontrado');
     }
@@ -163,6 +181,19 @@ io.on("connection", (socket) => {
       callback({ success: true, player: newPlayer });
     } catch (error) {
       callback({ success: false, error: error.message });
+    }
+  });
+
+  socket.on("leave", (name, callback) => {
+    try {
+      const removed = gameState.removePlayer(name);
+      if (removed) {
+        io.emit("playersUpdated", gameState.getPlayers());
+        console.log(`Player ${name} left the game`);
+      }
+      if (callback) callback({ success: true });
+    } catch (error) {
+      if (callback) callback({ success: false, error: error.message });
     }
   });
 

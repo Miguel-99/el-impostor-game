@@ -3,6 +3,8 @@ class GameClient {
   constructor() {
     this.playerName = this.getStoredPlayerName();
     this.socket = io();
+    this.isJoined = false;
+    this.onStateChange = null;
     this.setupSocketListeners();
   }
 
@@ -56,7 +58,28 @@ class GameClient {
     const trimmedName = name.trim();
     const response = await this.emitAsync('join', trimmedName);
     this.setStoredPlayerName(trimmedName);
+    this.isJoined = true;
+    if (this.onStateChange) this.onStateChange('joined', trimmedName);
     return response.player;
+  }
+
+  async leaveGame() {
+    if (!this.playerName) return;
+
+    const oldName = this.playerName;
+    try {
+      // Try to notify server but don't hang UI if it fails
+      await Promise.race([
+        this.emitAsync('leave', oldName),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout notifying server')), 2000))
+      ]).catch(err => console.warn('Leave notification error:', err));
+    } finally {
+      this.setStoredPlayerName("");
+      this.isJoined = false;
+      if (this.onStateChange) {
+        this.onStateChange('left', oldName);
+      }
+    }
   }
 
   async addWord(name, word) {
