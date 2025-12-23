@@ -178,9 +178,9 @@ io.on("connection", (socket) => {
     try {
       const newPlayer = gameState.addPlayer(name);
       io.emit("playersUpdated", gameState.getPlayers());
-      callback({ success: true, player: newPlayer });
+      if (callback) callback({ success: true, player: newPlayer });
     } catch (error) {
-      callback({ success: false, error: error.message });
+      if (callback) callback({ success: false, error: error.message });
     }
   });
 
@@ -201,14 +201,14 @@ io.on("connection", (socket) => {
     try {
       const result = gameState.addWord(name, word);
       io.emit("playersUpdated", gameState.getPlayers());
-      callback({ success: true, word: result.word });
+      if (callback) callback({ success: true, word: result.word });
     } catch (error) {
-      callback({ success: false, error: error.message });
+      if (callback) callback({ success: false, error: error.message });
     }
   });
 
   socket.on("getPlayers", (callback) => {
-    callback(gameState.getPlayers());
+    if (callback) callback(gameState.getPlayers());
   });
 
   socket.on("startGame", (callback) => {
@@ -216,9 +216,9 @@ io.on("connection", (socket) => {
       const result = gameState.startGame();
       const { impostorName, ...clientResult } = result;
       io.emit("gameStarted", clientResult);
-      callback({ success: true, result: clientResult });
+      if (callback) callback({ success: true, result: clientResult });
     } catch (error) {
-      callback({ success: false, error: error.message });
+      if (callback) callback({ success: false, error: error.message });
     }
   });
 
@@ -239,20 +239,22 @@ io.on("connection", (socket) => {
   socket.on("getPlayerState", (name, callback) => {
     try {
       const state = gameState.getPlayerState(name);
-      callback({ success: true, state });
+      if (callback) callback({ success: true, state });
     } catch (error) {
-      callback({ success: false, error: error.message });
+      if (callback) callback({ success: false, error: error.message });
     }
   });
 
   socket.on("getGameStatus", (callback) => {
-    callback({
-      started: gameState.started,
-      playerCount: gameState.players.length,
-      wordsCount: gameState.words.length,
-      hasCommonWord: !!gameState.commonWord,
-      starterPlayer: gameState.starterPlayer
-    });
+    if (callback) {
+      callback({
+        started: gameState.started,
+        playerCount: gameState.players.length,
+        wordsCount: gameState.words.length,
+        hasCommonWord: !!gameState.commonWord,
+        starterPlayer: gameState.starterPlayer
+      });
+    }
   });
 
   socket.on("disconnect", () => {

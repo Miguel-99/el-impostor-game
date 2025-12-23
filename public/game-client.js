@@ -39,13 +39,19 @@ class GameClient {
   // WebSocket Wrapper for Promises
   emitAsync(event, data) {
     return new Promise((resolve, reject) => {
-      this.socket.emit(event, data, (response) => {
+      const callback = (response) => {
         if (response && response.success === false) {
           reject(new Error(response.error));
         } else {
           resolve(response);
         }
-      });
+      };
+
+      if (data !== undefined) {
+        this.socket.emit(event, data, callback);
+      } else {
+        this.socket.emit(event, callback);
+      }
     });
   }
 

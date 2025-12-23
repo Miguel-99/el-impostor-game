@@ -11,51 +11,60 @@
 <body>
   <div class="container">
     <h1>🎮 El Impostor - Host</h1>
-    <p class="text-center mb-20">Panel de control del juego</p>
 
-    <!-- Player Management -->
-    <div class="form-group">
-      <h2>👥 Gestión de Jugadores</h2>
-
+    <div id="join-view">
+      <p class="text-center mb-20">Únete como host para gestionar la partida</p>
       <form id="joinForm">
         <div class="form-group">
-          <label for="name">Agregar jugador:</label>
-          <input type="text" id="name" name="name" placeholder="Nombre del jugador" required />
+          <label for="name">Tu nombre:</label>
+          <input type="text" id="name" name="name" placeholder="Ingresa tu nombre" required />
         </div>
-        <button type="submit">➕ Agregar jugador</button>
-      </form>
-
-      <form id="wordForm">
-        <div class="form-group">
-          <label for="word">Agregar palabra para jugador actual:</label>
-          <input type="text" id="word" name="word" placeholder="Palabra secreta" required />
-        </div>
-        <button type="submit" class="btn-success">📝 Agregar palabra</button>
+        <button type="submit">🚀 Unirse y Gestionar</button>
       </form>
     </div>
 
-    <!-- Players List -->
-    <div class="flex justify-between align-center">
-      <h2>📋 Lista de Jugadores</h2>
-    </div>
-    <ul id="players"></ul>
-
-    <!-- Game Controls -->
-    <div class="form-group">
-      <h2>🎯 Control del Juego</h2>
-      <div class="text-center">
-        <button id="start" class="btn-success">🚀 Iniciar partida</button>
-        <button id="role" class="btn-warning">🔍 Consultar rol</button>
-        <button id="status" class="btn-info">📊 Estado del juego</button>
+    <div id="game-view" class="hidden">
+      <div class="player-header">
+        <p>Host: <strong id="display-name"></strong></p>
+        <button id="leave-btn" class="btn-danger btn-sm">🚪 Salir</button>
       </div>
-    </div>
 
-    <!-- Reset Controls -->
-    <div class="form-group">
-      <h2>🔄 Reiniciar</h2>
-      <div class="text-center">
-        <button id="reset-words" class="btn-warning">🗑️ Borrar palabras</button>
-        <button id="reset" class="btn-danger">💥 Reiniciar todo</button>
+      <!-- Player Management -->
+      <div class="form-group">
+        <h2>👥 Gestión de Jugadores</h2>
+
+        <form id="wordForm">
+          <div class="form-group">
+            <label for="word">Agregar palabra para jugador actual:</label>
+            <input type="text" id="word" name="word" placeholder="Palabra secreta" required />
+          </div>
+          <button type="submit" class="btn-success">📝 Agregar palabra</button>
+        </form>
+      </div>
+
+      <!-- Players List -->
+      <div class="flex justify-between align-center">
+        <h2>📋 Lista de Jugadores</h2>
+      </div>
+      <ul id="players"></ul>
+
+      <!-- Game Controls -->
+      <div class="form-group">
+        <h2>🎯 Control del Juego</h2>
+        <div class="text-center">
+          <button id="start" class="btn-success">🚀 Iniciar partida</button>
+          <button id="role" class="btn-warning">🔍 Consultar rol</button>
+          <button id="status" class="btn-info">📊 Estado del juego</button>
+        </div>
+      </div>
+
+      <!-- Reset Controls -->
+      <div class="form-group">
+        <h2>🔄 Reiniciar</h2>
+        <div class="text-center">
+          <button id="reset-words" class="btn-warning">🗑️ Borrar palabras</button>
+          <button id="reset" class="btn-danger">💥 Reiniciar todo</button>
+        </div>
       </div>
     </div>
 
@@ -74,9 +83,51 @@
     <div id="messages"></div>
   </div>
 
+  <!-- Game Status -->
+  <div id="gameStatus" class="game-status hidden">
+    <h3>📊 Estado del juego:</h3>
+    <div id="statusContent"></div>
+  </div>
+
+  <!-- Starter Player Display -->
+  <div id="starterPlayerDisplay" class="message info hidden">
+    <h3 id="starterPlayerText"></h3>
+  </div>
+
+  <!-- Messages -->
+  <div id="messages"></div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="game-client.js"></script>
   <script>
+    // UI State Management
+    function updateUIState(state, name) {
+      const joinView = document.getElementById('join-view');
+      const gameView = document.getElementById('game-view');
+      const displayName = document.getElementById('display-name');
+
+      if (state === 'joined') {
+        joinView.classList.add('hidden');
+        gameView.classList.remove('hidden');
+        if (displayName) displayName.textContent = name;
+      } else {
+        joinView.classList.remove('hidden');
+        gameView.classList.add('hidden');
+        if (displayName) displayName.textContent = '';
+      }
+    }
+
+    // Initialize state change handler
+    gameClient.onStateChange = (state, name) => {
+      updateUIState(state, name);
+    };
+
+    // Check initial state
+    if (gameClient.playerName) {
+      document.getElementById('name').value = gameClient.playerName;
+    }
+
     // Custom message display for better UX
     window.showCustomMessage = function (message, type = 'info') {
       const messagesContainer = document.getElementById('messages');
@@ -112,6 +163,7 @@
 
       displayPlayers(players) {
         const list = document.getElementById("players");
+        if (!list) return;
         list.innerHTML = "";
 
         if (players.length === 0) {
@@ -217,12 +269,19 @@
         }
       }
 
+      async handleLeave() {
+        if (confirm('¿Estás seguro de que quieres salir del panel de gestión?')) {
+          await gameClient.leaveGame();
+        }
+      }
+
       setupHostFeatures() {
         // Setup host-specific buttons
         gameClient.setupButton('start', () => this.handleStartGame());
         gameClient.setupButton('status', () => this.handleGameStatus());
         gameClient.setupButton('reset', () => this.handleReset());
         gameClient.setupButton('reset-words', () => this.handleResetWords());
+        gameClient.setupButton('leave-btn', () => this.handleLeave());
 
         // Listen for real-time updates
         window.addEventListener('game:playersUpdated', (e) => {
@@ -238,8 +297,10 @@
         });
 
         window.addEventListener('game:reset', () => {
-          document.getElementById('gameStatus').classList.add('hidden');
-          document.getElementById('starterPlayerDisplay').classList.add('hidden');
+          const gameStatus = document.getElementById('gameStatus');
+          const starterDisplay = document.getElementById('starterPlayerDisplay');
+          if (gameStatus) gameStatus.classList.add('hidden');
+          if (starterDisplay) starterDisplay.classList.add('hidden');
         });
       }
     }
