@@ -1,8 +1,12 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const path = require("path");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
 // Game State Management
@@ -148,70 +152,84 @@ const gameState = new GameState();
 app.use(bodyParser.json());
 app.use(express.static("public"));
 
-// Error handler middleware
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+// WebSocket Logic
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
 
-const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err.message);
-  res.status(err.status || 500).json({ 
-    error: err.message || 'Error interno del servidor' 
+  socket.on("join", (name, callback) => {
+    try {
+      const newPlayer = gameState.addPlayer(name);
+      io.emit("playersUpdated", gameState.getPlayers());
+      callback({ success: true, player: newPlayer });
+    } catch (error) {
+      callback({ success: false, error: error.message });
+    }
   });
-};
 
-// Routes
-app.post("/join", asyncHandler(async (req, res) => {
-  const { name } = req.body;
-  const newPlayer = gameState.addPlayer(name);
-  res.json(newPlayer);
-}));
+  socket.on("addWord", ({ name, word }, callback) => {
+    try {
+      const result = gameState.addWord(name, word);
+      io.emit("playersUpdated", gameState.getPlayers());
+      callback({ success: true, word: result.word });
+    } catch (error) {
+      callback({ success: false, error: error.message });
+    }
+  });
 
-app.post("/add-word", asyncHandler(async (req, res) => {
-  const { name, word } = req.body;
-  const result = gameState.addWord(name, word);
-  res.json(result);
-}));
+  socket.on("getPlayers", (callback) => {
+    callback(gameState.getPlayers());
+  });
 
-app.get("/players", (req, res) => {
-  res.json(gameState.getPlayers());
+  socket.on("startGame", (callback) => {
+    try {
+      const result = gameState.startGame();
+      const { impostorName, ...clientResult } = result;
+      io.emit("gameStarted", clientResult);
+      callback({ success: true, result: clientResult });
+    } catch (error) {
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  socket.on("resetGame", (callback) => {
+    gameState.reset();
+    io.emit("gameReset", { message: "Juego reseteado completamente" });
+    io.emit("playersUpdated", []);
+    if (callback) callback({ success: true });
+  });
+
+  socket.on("resetWords", (callback) => {
+    gameState.removeWords();
+    io.emit("gameReset", { message: "Palabras eliminadas y juego reiniciado" });
+    io.emit("playersUpdated", gameState.getPlayers());
+    if (callback) callback({ success: true });
+  });
+
+  socket.on("getPlayerState", (name, callback) => {
+    try {
+      const state = gameState.getPlayerState(name);
+      callback({ success: true, state });
+    } catch (error) {
+      callback({ success: false, error: error.message });
+    }
+  });
+
+  socket.on("getGameStatus", (callback) => {
+    callback({
+      started: gameState.started,
+      playerCount: gameState.players.length,
+      wordsCount: gameState.words.length,
+      hasCommonWord: !!gameState.commonWord,
+      starterPlayer: gameState.starterPlayer
+    });
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected");
+  });
 });
 
-app.post("/start", asyncHandler(async (req, res) => {
-  const result = gameState.startGame();
-  // No enviar el nombre del impostor al cliente
-  const { impostorName, ...clientResult } = result;
-  res.json(clientResult);
-}));
-
-app.get("/state/:name", asyncHandler(async (req, res) => {
-  const playerName = req.params.name;
-  const playerState = gameState.getPlayerState(playerName);
-  res.json(playerState);
-}));
-
-app.post("/reset", (req, res) => {
-  gameState.reset();
-  res.json({ message: "Juego reseteado completamente" });
-});
-
-app.post("/reset-words", (req, res) => {
-  gameState.removeWords();
-  res.json({ message: "Palabras eliminadas y juego reiniciado" });
-});
-
-// Legacy endpoints (mantener compatibilidad)
-app.get("/remove-players", (req, res) => {
-  gameState.reset();
-  res.json({ message: "Juego reseteado" });
-});
-
-app.get("/remove-words", (req, res) => {
-  gameState.removeWords();
-  res.json({ message: "Palabras eliminadas y juego reiniciado" });
-});
-
-// Game status endpoint
+// Routes (keeping HTTP as fallback/legacy)
 app.get("/status", (req, res) => {
   res.json({
     started: gameState.started,
@@ -222,18 +240,10 @@ app.get("/status", (req, res) => {
   });
 });
 
-// Error handling middleware
-app.use(errorHandler);
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint no encontrado' });
-});
-
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🎮 Servidor El Impostor ejecutándose en http://localhost:${PORT}`);
   console.log(`📁 Archivos estáticos servidos desde: ${path.join(__dirname, 'public')}`);
 });
 
-module.exports = app; // Para testing
+module.exports = server;

@@ -2,6 +2,8 @@
 class GameClient {
   constructor() {
     this.playerName = this.getStoredPlayerName();
+    this.socket = io();
+    this.setupSocketListeners();
   }
 
   // Local Storage Management
@@ -14,43 +16,47 @@ class GameClient {
     this.playerName = name;
   }
 
-  // API Calls
-  async makeRequest(url, options = {}) {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        },
-        ...options
-      });
+  // Socket Logic
+  setupSocketListeners() {
+    this.socket.on("playersUpdated", (players) => {
+      // Dispatch custom event for UI to react
+      window.dispatchEvent(new CustomEvent("game:playersUpdated", { detail: players }));
+    });
 
-      const data = await response.json();
+    this.socket.on("gameStarted", (result) => {
+      window.dispatchEvent(new CustomEvent("game:started", { detail: result }));
+      this.showSuccess(`🎉 ${result.message}`);
+    });
 
-      if (!response.ok) {
-        throw new Error(data.error || `Error ${response.status}: ${response.statusText}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('API Error:', error);
-      throw error;
-    }
+    this.socket.on("gameReset", (data) => {
+      window.dispatchEvent(new CustomEvent("game:reset", { detail: data }));
+      this.showSuccess(`🔄 ${data.message}`);
+    });
   }
 
+  // WebSocket Wrapper for Promises
+  emitAsync(event, data) {
+    return new Promise((resolve, reject) => {
+      this.socket.emit(event, data, (response) => {
+        if (response && response.success === false) {
+          reject(new Error(response.error));
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  }
+
+  // API Methods (now using Sockets)
   async joinGame(name) {
     if (!name || name.trim() === '') {
       throw new Error('El nombre es requerido');
     }
 
     const trimmedName = name.trim();
-    const data = await this.makeRequest('/join', {
-      method: 'POST',
-      body: JSON.stringify({ name: trimmedName })
-    });
-
+    const response = await this.emitAsync('join', trimmedName);
     this.setStoredPlayerName(trimmedName);
-    return data;
+    return response.player;
   }
 
   async addWord(name, word) {
@@ -58,23 +64,22 @@ class GameClient {
       throw new Error('Nombre y palabra son requeridos');
     }
 
-    return await this.makeRequest('/add-word', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        name: name.trim(), 
-        word: word.trim() 
-      })
+    const response = await this.emitAsync('addWord', {
+      name: name.trim(),
+      word: word.trim()
     });
+    return response;
   }
 
   async getPlayers() {
-    return await this.makeRequest('/players');
+    return new Promise((resolve) => {
+      this.socket.emit('getPlayers', resolve);
+    });
   }
 
   async startGame() {
-    return await this.makeRequest('/start', {
-      method: 'POST'
-    });
+    const response = await this.emitAsync('startGame');
+    return response.result;
   }
 
   async getPlayerState(name) {
@@ -82,34 +87,30 @@ class GameClient {
       throw new Error('El nombre es requerido');
     }
 
-    return await this.makeRequest(`/state/${encodeURIComponent(name.trim())}`);
+    const response = await this.emitAsync('getPlayerState', name.trim());
+    return response.state;
   }
 
   async resetGame() {
-    return await this.makeRequest('/reset', {
-      method: 'POST'
-    });
+    return await this.emitAsync('resetGame');
   }
 
   async resetWords() {
-    return await this.makeRequest('/reset-words', {
-      method: 'POST'
-    });
+    return await this.emitAsync('resetWords');
   }
 
   async getGameStatus() {
-    return await this.makeRequest('/status');
+    return new Promise((resolve) => {
+      this.socket.emit('getGameStatus', resolve);
+    });
   }
 
   // UI Helpers
   showMessage(message, type = 'info') {
-    // Try to use a custom message display if available
     if (window.showCustomMessage) {
       window.showCustomMessage(message, type);
       return;
     }
-
-    // Fallback to alert
     alert(message);
   }
 
@@ -126,14 +127,10 @@ class GameClient {
   // Form Helpers
   setupForm(formId, handler) {
     const form = document.getElementById(formId);
-    if (!form) {
-      console.warn(`Form with id '${formId}' not found`);
-      return;
-    }
+    if (!form) return;
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
       try {
         await handler(e, form);
       } catch (error) {
@@ -144,14 +141,10 @@ class GameClient {
 
   setupButton(buttonId, handler) {
     const button = document.getElementById(buttonId);
-    if (!button) {
-      console.warn(`Button with id '${buttonId}' not found`);
-      return;
-    }
+    if (!button) return;
 
     button.addEventListener('click', async (e) => {
       try {
-        // Disable button during operation
         button.disabled = true;
         await handler(e, button);
       } catch (error) {
@@ -166,56 +159,48 @@ class GameClient {
   async handleJoinForm(e, form) {
     const formData = new FormData(form);
     const name = formData.get('name');
-    
-    const result = await this.joinGame(name);
-    this.showSuccess(`Te uniste al juego como: ${result.name}`);
-    
-    // Update name field if it changed (trimmed)
+    const player = await this.joinGame(name);
+    this.showSuccess(`Te uniste como: ${player.name}`);
+
     const nameInput = form.querySelector('#name');
-    if (nameInput) {
-      nameInput.value = result.name;
-    }
+    if (nameInput) nameInput.value = player.name;
   }
 
   async handleWordForm(e, form) {
     const formData = new FormData(form);
     const name = formData.get('name') || this.playerName;
     const word = formData.get('word');
-    
-    if (!name) {
-      throw new Error('Debes unirte al juego primero');
-    }
+
+    if (!name) throw new Error('Debes unirte al juego primero');
 
     const result = await this.addWord(name, word);
-    this.showSuccess(`Palabra "${result.word}" agregada correctamente`);
-    
-    // Clear word input
+    this.showSuccess(`Palabra "${result.word}" agregada`);
+
     const wordInput = form.querySelector('#word');
-    if (wordInput) {
-      wordInput.value = '';
-    }
+    if (wordInput) wordInput.value = '';
   }
 
   async handleRoleCheck() {
     let name = this.playerName;
-    
     if (!name) {
       name = prompt("Ingrese el nombre del jugador:");
       if (!name) return;
     }
 
-    const playerState = await this.getPlayerState(name);
-    
-    if (playerState.role === 'impostor') {
-      this.showMessage("🎭 Eres el IMPOSTOR", 'warning');
-    } else {
-      this.showMessage(`📝 Tu palabra es: "${playerState.word}"`, 'info');
+    try {
+      const playerState = await this.getPlayerState(name);
+      if (playerState.role === 'impostor') {
+        this.showMessage("🎭 Eres el IMPOSTOR", 'warning');
+      } else {
+        this.showMessage(`📝 Tu palabra es: "${playerState.word}"`, 'info');
+      }
+    } catch (error) {
+      this.showError(error);
     }
   }
 
   // Initialize common functionality
   initializeCommonFeatures() {
-    // Load saved name on page load
     window.addEventListener("DOMContentLoaded", () => {
       const nameInput = document.getElementById("name");
       if (nameInput && this.playerName) {
@@ -223,7 +208,6 @@ class GameClient {
       }
     });
 
-    // Setup common forms
     this.setupForm('joinForm', this.handleJoinForm.bind(this));
     this.setupForm('wordForm', this.handleWordForm.bind(this));
     this.setupButton('role', this.handleRoleCheck.bind(this));
@@ -233,7 +217,7 @@ class GameClient {
 // Create global instance
 window.gameClient = new GameClient();
 
-// Auto-initialize when DOM is ready
+// Auto-initialize
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     window.gameClient.initializeCommonFeatures();

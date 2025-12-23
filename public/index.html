@@ -42,17 +42,18 @@
     <div id="messages"></div>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="game-client.js"></script>
   <script>
     // Custom message display for better UX
-    window.showCustomMessage = function(message, type = 'info') {
+    window.showCustomMessage = function (message, type = 'info') {
       const messagesContainer = document.getElementById('messages');
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${type}`;
       messageDiv.textContent = message;
-      
+
       messagesContainer.appendChild(messageDiv);
-      
+
       // Auto-remove after 5 seconds
       setTimeout(() => {
         if (messageDiv.parentNode) {
@@ -66,14 +67,14 @@
       const status = await gameClient.getGameStatus();
       const statusDiv = document.getElementById('gameStatus');
       const contentDiv = document.getElementById('statusContent');
-      
+
       contentDiv.innerHTML = `
         <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
         <p><strong>Jugadores:</strong> ${status.playerCount}</p>
         <p><strong>Palabras:</strong> ${status.wordsCount}</p>
         ${status.starterPlayer ? `<p><strong>Jugador inicial:</strong> ${status.starterPlayer}</p>` : ''}
       `;
-      
+
       statusDiv.classList.remove('hidden');
       if (status.started) {
         statusDiv.classList.add('started');
@@ -81,9 +82,9 @@
     });
 
     // Enhanced role check with better messaging
-    gameClient.handleRoleCheck = async function() {
+    gameClient.handleRoleCheck = async function () {
       let name = this.playerName;
-      
+
       if (!name) {
         name = prompt("Ingrese el nombre del jugador:");
         if (!name) return;
@@ -91,7 +92,7 @@
 
       try {
         const playerState = await this.getPlayerState(name);
-        
+
         if (playerState.role === 'impostor') {
           this.showMessage("🎭 ¡Eres el IMPOSTOR! Tu objetivo es pasar desapercibido.", 'warning');
         } else {
@@ -105,6 +106,30 @@
         }
       }
     };
+    // Listen for real-time updates
+    window.addEventListener('game:playersUpdated', (e) => {
+      // Potentially update player count or local lists if they existed here
+      console.log('Jugadores actualizados:', e.detail);
+    });
+
+    window.addEventListener('game:started', (e) => {
+      const result = e.detail;
+      const statusDiv = document.getElementById('gameStatus');
+      const contentDiv = document.getElementById('statusContent');
+
+      contentDiv.innerHTML = `
+        <p><strong>Estado:</strong> 🟢 Iniciado</p>
+        <p><strong>Jugadores:</strong> ${result.totalPlayers}</p>
+        <p><strong>Jugador inicial:</strong> ${result.starterPlayer}</p>
+      `;
+      statusDiv.classList.add('started', 'visible'); // Use a generic class for visibility if needed
+      statusDiv.classList.remove('hidden');
+    });
+
+    window.addEventListener('game:reset', () => {
+      document.getElementById('gameStatus').classList.add('hidden');
+      document.getElementById('gameStatus').classList.remove('started');
+    });
   </script>
 </body>
 

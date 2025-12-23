@@ -16,7 +16,7 @@
     <!-- Player Management -->
     <div class="form-group">
       <h2>👥 Gestión de Jugadores</h2>
-      
+
       <form id="joinForm">
         <div class="form-group">
           <label for="name">Agregar jugador:</label>
@@ -35,13 +35,10 @@
     </div>
 
     <!-- Players List -->
-    <div class="form-group">
-      <div class="flex justify-between align-center">
-        <h2>📋 Lista de Jugadores</h2>
-        <button id="refresh" class="btn-info">🔄 Actualizar</button>
-      </div>
-      <ul id="players"></ul>
+    <div class="flex justify-between align-center">
+      <h2>📋 Lista de Jugadores</h2>
     </div>
+    <ul id="players"></ul>
 
     <!-- Game Controls -->
     <div class="form-group">
@@ -77,17 +74,18 @@
     <div id="messages"></div>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="game-client.js"></script>
   <script>
     // Custom message display for better UX
-    window.showCustomMessage = function(message, type = 'info') {
+    window.showCustomMessage = function (message, type = 'info') {
       const messagesContainer = document.getElementById('messages');
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${type}`;
       messageDiv.textContent = message;
-      
+
       messagesContainer.appendChild(messageDiv);
-      
+
       // Auto-remove after 5 seconds
       setTimeout(() => {
         if (messageDiv.parentNode) {
@@ -115,7 +113,7 @@
       displayPlayers(players) {
         const list = document.getElementById("players");
         list.innerHTML = "";
-        
+
         if (players.length === 0) {
           const li = document.createElement("li");
           li.textContent = "No hay jugadores en el juego";
@@ -141,16 +139,16 @@
         try {
           const result = await gameClient.startGame();
           gameClient.showSuccess(`🎉 ${result.message}`);
-          
+
           // Show starter player
           const starterDisplay = document.getElementById('starterPlayerDisplay');
           const starterText = document.getElementById('starterPlayerText');
           starterText.textContent = `🎯 Comienza la partida: ${result.starterPlayer}`;
           starterDisplay.classList.remove('hidden');
-          
+
           // Refresh players list
           await this.loadPlayers();
-          
+
         } catch (error) {
           gameClient.showError(error);
         }
@@ -161,7 +159,7 @@
           const status = await gameClient.getGameStatus();
           const statusDiv = document.getElementById('gameStatus');
           const contentDiv = document.getElementById('statusContent');
-          
+
           contentDiv.innerHTML = `
             <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
             <p><strong>Jugadores:</strong> ${status.playerCount}</p>
@@ -169,7 +167,7 @@
             ${status.starterPlayer ? `<p><strong>Jugador inicial:</strong> ${status.starterPlayer}</p>` : ''}
             ${status.hasCommonWord ? '<p><strong>Palabra común:</strong> ✅ Seleccionada</p>' : '<p><strong>Palabra común:</strong> ❌ No seleccionada</p>'}
           `;
-          
+
           statusDiv.classList.remove('hidden');
           if (status.started) {
             statusDiv.classList.add('started');
@@ -187,11 +185,11 @@
         try {
           await gameClient.resetGame();
           gameClient.showSuccess('🔄 Juego reiniciado completamente');
-          
+
           // Hide displays
           document.getElementById('gameStatus').classList.add('hidden');
           document.getElementById('starterPlayerDisplay').classList.add('hidden');
-          
+
           // Refresh players list
           await this.loadPlayers();
         } catch (error) {
@@ -207,11 +205,11 @@
         try {
           await gameClient.resetWords();
           gameClient.showSuccess('🗑️ Palabras eliminadas y juego reiniciado');
-          
+
           // Hide displays
           document.getElementById('gameStatus').classList.add('hidden');
           document.getElementById('starterPlayerDisplay').classList.add('hidden');
-          
+
           // Refresh players list
           await this.loadPlayers();
         } catch (error) {
@@ -221,25 +219,28 @@
 
       setupHostFeatures() {
         // Setup host-specific buttons
-        gameClient.setupButton('refresh', () => this.loadPlayers());
         gameClient.setupButton('start', () => this.handleStartGame());
         gameClient.setupButton('status', () => this.handleGameStatus());
         gameClient.setupButton('reset', () => this.handleReset());
         gameClient.setupButton('reset-words', () => this.handleResetWords());
 
-        // Override word form handler to refresh players after adding word
-        const originalWordHandler = gameClient.handleWordForm.bind(gameClient);
-        gameClient.handleWordForm = async (e, form) => {
-          await originalWordHandler(e, form);
-          await this.loadPlayers(); // Refresh players list
-        };
+        // Listen for real-time updates
+        window.addEventListener('game:playersUpdated', (e) => {
+          this.displayPlayers(e.detail);
+        });
 
-        // Override join form handler to refresh players after joining
-        const originalJoinHandler = gameClient.handleJoinForm.bind(gameClient);
-        gameClient.handleJoinForm = async (e, form) => {
-          await originalJoinHandler(e, form);
-          await this.loadPlayers(); // Refresh players list
-        };
+        window.addEventListener('game:started', (e) => {
+          const result = e.detail;
+          const starterDisplay = document.getElementById('starterPlayerDisplay');
+          const starterText = document.getElementById('starterPlayerText');
+          starterText.textContent = `🎯 Comienza la partida: ${result.starterPlayer}`;
+          starterDisplay.classList.remove('hidden');
+        });
+
+        window.addEventListener('game:reset', () => {
+          document.getElementById('gameStatus').classList.add('hidden');
+          document.getElementById('starterPlayerDisplay').classList.add('hidden');
+        });
       }
     }
 
