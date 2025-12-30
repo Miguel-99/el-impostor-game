@@ -161,6 +161,30 @@ class GameState {
       hasWord: !!player.word
     }));
   }
+
+  reorderPlayers(orderedNames) {
+    if (!Array.isArray(orderedNames)) {
+      throw new Error('El nuevo orden debe ser una lista de nombres');
+    }
+
+    // Verify all current players are in the list
+    const currentNames = this.players.map(p => p.name);
+    if (orderedNames.length !== currentNames.length) {
+      throw new Error('La lista no contiene a todos los jugadores');
+    }
+
+    const hasAllPlayers = currentNames.every(name => orderedNames.includes(name));
+    if (!hasAllPlayers) {
+      throw new Error('La lista debe contener exactamente a los mismos jugadores');
+    }
+
+    // Create new player array based on the ordered names
+    this.players = orderedNames.map(name => {
+      return this.players.find(p => p.name === name);
+    });
+
+    return this.getPlayers();
+  }
 }
 
 // Initialize game state
@@ -217,6 +241,16 @@ io.on("connection", (socket) => {
       const { impostorName, ...clientResult } = result;
       io.emit("gameStarted", clientResult);
       if (callback) callback({ success: true, result: clientResult });
+    } catch (error) {
+      if (callback) callback({ success: false, error: error.message });
+    }
+  });
+
+  socket.on("reorderPlayers", (orderedNames, callback) => {
+    try {
+      const updatedPlayers = gameState.reorderPlayers(orderedNames);
+      io.emit("playersUpdated", updatedPlayers);
+      if (callback) callback({ success: true, players: updatedPlayers });
     } catch (error) {
       if (callback) callback({ success: false, error: error.message });
     }

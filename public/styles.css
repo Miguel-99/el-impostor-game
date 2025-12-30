@@ -25,8 +25,15 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 h1 {
@@ -183,18 +190,107 @@ button:disabled {
   color: #f56565;
 }
 
+/* Player List Item Enhancements */
+.player-item {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-name {
+  font-weight: 600;
+  font-size: 1.1em;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #a0aec0;
+  font-size: 1.5em;
+  padding: 0 10px;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.player-item.draggable {
+  cursor: grab;
+}
+
+.player-item.dragging {
+  opacity: 0.5;
+  background: #edf2f7;
+  border-style: dashed;
+}
+
+.player-item.drag-over {
+  border-top: 2px solid #667eea;
+  transform: translateY(2px);
+}
+
 /* Game status */
 .game-status {
-  background: #edf2f7;
-  border-radius: 10px;
-  padding: 20px;
-  margin: 20px 0;
-  border-left: 4px solid #4299e1;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 25px 0;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.game-status h3 {
+  margin-bottom: 15px;
+  color: #4a5568;
+  border-bottom: 2px solid #edf2f7;
+  padding-bottom: 8px;
 }
 
 .game-status.started {
-  border-left-color: #48bb78;
+  border: 2px solid #48bb78;
   background: #f0fff4;
+}
+
+.role-info {
+  margin-top: 15px;
+  padding: 20px;
+  border-radius: 10px;
+  font-size: 1.2em;
+  text-align: center;
+  animation: pulse 2s infinite;
+}
+
+.role-info.success {
+  background: #c6f6d5;
+  color: #22543d;
+  border: 2px solid #48bb78;
+}
+
+.role-info.warning {
+  background: #fff5f5;
+  color: #c53030;
+  border: 2px solid #f56565;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.02);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* Messages */
@@ -235,21 +331,21 @@ button:disabled {
     margin: 10px;
     padding: 20px;
   }
-  
+
   h1 {
     font-size: 2em;
   }
-  
+
   button {
     width: 100%;
     margin: 5px 0;
   }
-  
+
   #players li {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .status-indicator {
     margin-left: 0;
     margin-top: 5px;
@@ -269,8 +365,13 @@ button:disabled {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Hidden elements */

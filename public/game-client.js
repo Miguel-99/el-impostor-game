@@ -111,6 +111,11 @@ class GameClient {
     return response.result;
   }
 
+  async reorderPlayers(orderedNames) {
+    const response = await this.emitAsync('reorderPlayers', orderedNames);
+    return response.players;
+  }
+
   async getPlayerState(name) {
     if (!name || name.trim() === '') {
       throw new Error('El nombre es requerido');
@@ -209,25 +214,6 @@ class GameClient {
     if (wordInput) wordInput.value = '';
   }
 
-  async handleRoleCheck() {
-    let name = this.playerName;
-    if (!name) {
-      name = prompt("Ingrese el nombre del jugador:");
-      if (!name) return;
-    }
-
-    try {
-      const playerState = await this.getPlayerState(name);
-      if (playerState.role === 'impostor') {
-        this.showMessage("🎭 Eres el IMPOSTOR", 'warning');
-      } else {
-        this.showMessage(`📝 Tu palabra es: "${playerState.word}"`, 'info');
-      }
-    } catch (error) {
-      this.showError(error);
-    }
-  }
-
   // Initialize common functionality
   initializeCommonFeatures() {
     window.addEventListener("DOMContentLoaded", () => {
@@ -239,7 +225,6 @@ class GameClient {
 
     this.setupForm('joinForm', this.handleJoinForm.bind(this));
     this.setupForm('wordForm', this.handleWordForm.bind(this));
-    this.setupButton('role', this.handleRoleCheck.bind(this));
   }
 }
 

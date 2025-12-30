@@ -38,13 +38,11 @@
       </form>
 
       <div class="text-center mt-20">
-        <button id="role" class="btn-warning">🔍 Consultar mi rol</button>
-        <button id="status" class="btn-info">📊 Estado del juego</button>
-      </div>
-
-      <div id="gameStatus" class="game-status hidden">
-        <h3>Estado del juego:</h3>
-        <div id="statusContent"></div>
+        <!-- Game Status Display -->
+        <div id="gameStatus" class="game-status hidden">
+          <h3>📊 Estado del juego:</h3>
+          <div id="statusContent"></div>
+        </div>
       </div>
     </div>
 
@@ -104,23 +102,64 @@
     };
 
     // Additional functionality specific to player page
-    gameClient.setupButton('status', async () => {
-      const status = await gameClient.getGameStatus();
-      const statusDiv = document.getElementById('gameStatus');
-      const contentDiv = document.getElementById('statusContent');
+    // Generic status updater for player
+    async function updateGameStatusPanel() {
+      try {
+        const name = gameClient.playerName;
+        if (!name) return;
 
-      contentDiv.innerHTML = `
-        <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
-        <p><strong>Jugadores:</strong> ${status.playerCount}</p>
-        <p><strong>Palabras:</strong> ${status.wordsCount}</p>
-        ${status.starterPlayer ? `<p><strong>Jugador inicial:</strong> ${status.starterPlayer}</p>` : ''}
-      `;
+        const status = await gameClient.getGameStatus();
+        const statusDiv = document.getElementById('gameStatus');
+        const contentDiv = document.getElementById('statusContent');
 
-      statusDiv.classList.remove('hidden');
-      if (status.started) {
-        statusDiv.classList.add('started');
+        let playerState = null;
+        if (status.started) {
+          try {
+            playerState = await gameClient.getPlayerState(name);
+          } catch (e) {
+            console.warn("Could not get player state:", e);
+          }
+        }
+
+        let html = `
+          <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
+          <p><strong>Jugadores:</strong> ${status.playerCount}</p>
+        `;
+
+        if (playerState) {
+          if (playerState.role === 'impostor') {
+            html += `<div class="role-info warning">👺 ERES EL <strong>IMPOSTOR</strong></div>`;
+          } else {
+            html += `<div class="role-info success">😇 ERES <strong>INOCENTE</strong><br>Palabra: <strong>${playerState.word}</strong></div>`;
+          }
+        }
+
+        if (status.starterPlayer) {
+          html += `<p><strong>Empieza:</strong> ${status.starterPlayer}</p>`;
+        }
+
+        contentDiv.innerHTML = html;
+        statusDiv.classList.remove('hidden');
+        if (status.started) {
+          statusDiv.classList.add('started');
+        } else {
+          statusDiv.classList.remove('started');
+        }
+      } catch (error) {
+        console.error('Error updating status panel:', error);
       }
-    });
+    }
+
+    // Call update on join
+    gameClient.onStateChange = (state, name) => {
+      updateUIState(state, name);
+      if (state === 'joined') updateGameStatusPanel();
+    };
+
+    // Remove initialization of deleted status button
+    // (This was at lines 107-123, but we'll just replace the whole section)
+    // gameClient.setupButton('status', ...) is now gone.
+
 
     gameClient.setupButton('leave-btn', async () => {
       if (confirm('¿Estás seguro de que quieres salir de la partida?')) {
@@ -128,31 +167,7 @@
       }
     });
 
-    // Enhanced role check with better messaging
-    gameClient.handleRoleCheck = async function () {
-      let name = this.playerName;
 
-      if (!name) {
-        this.showMessage('Debes unirte al juego primero', 'error');
-        return;
-      }
-
-      try {
-        const playerState = await this.getPlayerState(name);
-
-        if (playerState.role === 'impostor') {
-          this.showMessage("🎭 ¡Eres el IMPOSTOR! Tu objetivo es pasar desapercibido.", 'warning');
-        } else {
-          this.showMessage(`📝 Eres un jugador normal. Tu palabra es: "${playerState.word}"`, 'success');
-        }
-      } catch (error) {
-        if (error.message.includes('no ha comenzado')) {
-          this.showMessage('⏳ La partida aún no ha comenzado. Espera a que el host la inicie.', 'info');
-        } else {
-          throw error;
-        }
-      }
-    };
     // Listen for real-time updates
     window.addEventListener('game:playersUpdated', (e) => {
       // Potentially update player count or local lists if they existed here
@@ -160,24 +175,15 @@
     });
 
     window.addEventListener('game:started', (e) => {
-      const result = e.detail;
-      const statusDiv = document.getElementById('gameStatus');
-      const contentDiv = document.getElementById('statusContent');
-
-      contentDiv.innerHTML = `
-        <p><strong>Estado:</strong> 🟢 Iniciado</p>
-        <p><strong>Jugadores:</strong> ${result.totalPlayers}</p>
-        <p><strong>Jugador inicial:</strong> ${result.starterPlayer}</p>
-      `;
-      statusDiv.classList.add('started', 'visible');
-      statusDiv.classList.remove('hidden');
+      updateGameStatusPanel();
     });
 
     window.addEventListener('game:reset', () => {
-      document.getElementById('gameStatus').classList.add('hidden');
-      document.getElementById('gameStatus').classList.remove('started');
-      // If the game is reset, maybe we should also reset the player "joined" state?
-      // For now, let's just keep them joined unless the server clears them.
+      updateGameStatusPanel();
+    });
+
+    window.addEventListener('game:playersUpdated', () => {
+      updateGameStatusPanel();
     });
   </script>
 </body>

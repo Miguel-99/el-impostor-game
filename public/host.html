@@ -53,8 +53,6 @@
         <h2>🎯 Control del Juego</h2>
         <div class="text-center">
           <button id="start" class="btn-success">🚀 Iniciar partida</button>
-          <button id="role" class="btn-warning">🔍 Consultar rol</button>
-          <button id="status" class="btn-info">📊 Estado del juego</button>
         </div>
       </div>
 
@@ -68,34 +66,14 @@
       </div>
     </div>
 
-    <!-- Game Status -->
+    <!-- Game Status Display -->
     <div id="gameStatus" class="game-status hidden">
       <h3>📊 Estado del juego:</h3>
       <div id="statusContent"></div>
     </div>
 
-    <!-- Starter Player Display -->
-    <div id="starterPlayerDisplay" class="message info hidden">
-      <h3 id="starterPlayerText"></h3>
-    </div>
-
     <!-- Messages -->
     <div id="messages"></div>
-  </div>
-
-  <!-- Game Status -->
-  <div id="gameStatus" class="game-status hidden">
-    <h3>📊 Estado del juego:</h3>
-    <div id="statusContent"></div>
-  </div>
-
-  <!-- Starter Player Display -->
-  <div id="starterPlayerDisplay" class="message info hidden">
-    <h3 id="starterPlayerText"></h3>
-  </div>
-
-  <!-- Messages -->
-  <div id="messages"></div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -150,11 +128,13 @@
       constructor() {
         this.setupHostFeatures();
         this.loadPlayers(); // Load players on page load
+        this.handleGameStatus(); // Initial status load
       }
 
       async loadPlayers() {
         try {
           const players = await gameClient.getPlayers();
+          this.players = players; // Store players locally for reordering
           this.displayPlayers(players);
         } catch (error) {
           console.error('Error loading players:', error);
@@ -162,6 +142,7 @@
       }
 
       displayPlayers(players) {
+        this.players = players; // Keep internal state in sync
         const list = document.getElementById("players");
         if (!list) return;
         list.innerHTML = "";
@@ -175,28 +156,73 @@
           return;
         }
 
-        players.forEach(player => {
+        players.forEach((player, index) => {
           const li = document.createElement("li");
+          li.className = "player-item draggable";
+          li.draggable = true;
+          li.dataset.index = index;
           li.innerHTML = `
-            <span>${player.name}</span>
-            <span class="status-indicator ${player.hasWord ? 'has-word' : 'no-word'}">
-              ${player.hasWord ? '✅ Tiene palabra' : '❌ Sin palabra'}
-            </span>
+            <div class="player-info">
+              <span class="player-name">${player.name}</span>
+              <span class="status-indicator ${player.hasWord ? 'has-word' : 'no-word'}">
+                ${player.hasWord ? '✅' : '❌'}
+              </span>
+            </div>
+            <div class="drag-handle">≡</div>
           `;
+
+          // Drag and Drop Event Listeners
+          li.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', index);
+            li.classList.add('dragging');
+          });
+
+          li.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            li.classList.add('drag-over');
+          });
+
+          li.addEventListener('dragleave', () => {
+            li.classList.remove('drag-over');
+          });
+
+          li.addEventListener('drop', (e) => {
+            e.preventDefault();
+            li.classList.remove('drag-over');
+            const draggedIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            const targetIndex = index;
+            if (draggedIndex !== targetIndex) {
+              this.handleReorder(draggedIndex, targetIndex);
+            }
+          });
+
+          li.addEventListener('dragend', () => {
+            li.classList.remove('dragging');
+          });
+
           list.appendChild(li);
         });
+      }
+
+      async handleReorder(fromIndex, toIndex) {
+        const newPlayersOrder = [...this.players];
+        const movedPlayer = newPlayersOrder.splice(fromIndex, 1)[0];
+        newPlayersOrder.splice(toIndex, 0, movedPlayer);
+
+        try {
+          const names = newPlayersOrder.map(p => p.name);
+          await gameClient.reorderPlayers(names);
+          // UI updates via 'game:playersUpdated'
+        } catch (error) {
+          gameClient.showError(error);
+          this.displayPlayers(this.players); // Revert UI
+        }
       }
 
       async handleStartGame() {
         try {
           const result = await gameClient.startGame();
           gameClient.showSuccess(`🎉 ${result.message}`);
-
-          // Show starter player
-          const starterDisplay = document.getElementById('starterPlayerDisplay');
-          const starterText = document.getElementById('starterPlayerText');
-          starterText.textContent = `🎯 Comienza la partida: ${result.starterPlayer}`;
-          starterDisplay.classList.remove('hidden');
 
           // Refresh players list
           await this.loadPlayers();
@@ -208,11 +234,21 @@
 
       async handleGameStatus() {
         try {
+          const name = gameClient.playerName;
           const status = await gameClient.getGameStatus();
           const statusDiv = document.getElementById('gameStatus');
           const contentDiv = document.getElementById('statusContent');
 
-          contentDiv.innerHTML = `
+          let playerState = null;
+          if (status.started && name) {
+            try {
+              playerState = await gameClient.getPlayerState(name);
+            } catch (e) {
+              console.warn("Could not get player state for host:", e);
+            }
+          }
+
+          let html = `
             <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
             <p><strong>Jugadores:</strong> ${status.playerCount}</p>
             <p><strong>Palabras:</strong> ${status.wordsCount}</p>
@@ -220,9 +256,20 @@
             ${status.hasCommonWord ? '<p><strong>Palabra común:</strong> ✅ Seleccionada</p>' : '<p><strong>Palabra común:</strong> ❌ No seleccionada</p>'}
           `;
 
+          if (playerState) {
+            if (playerState.role === 'impostor') {
+              html += `<div class="role-info warning">👺 ERES EL <strong>IMPOSTOR</strong></div>`;
+            } else {
+              html += `<div class="role-info success">😇 ERES <strong>INOCENTE</strong><br>Palabra: <strong>${playerState.word}</strong></div>`;
+            }
+          }
+
+          contentDiv.innerHTML = html;
           statusDiv.classList.remove('hidden');
           if (status.started) {
             statusDiv.classList.add('started');
+          } else {
+            statusDiv.classList.remove('started');
           }
         } catch (error) {
           gameClient.showError(error);
@@ -237,10 +284,6 @@
         try {
           await gameClient.resetGame();
           gameClient.showSuccess('🔄 Juego reiniciado completamente');
-
-          // Hide displays
-          document.getElementById('gameStatus').classList.add('hidden');
-          document.getElementById('starterPlayerDisplay').classList.add('hidden');
 
           // Refresh players list
           await this.loadPlayers();
@@ -258,10 +301,6 @@
           await gameClient.resetWords();
           gameClient.showSuccess('🗑️ Palabras eliminadas y juego reiniciado');
 
-          // Hide displays
-          document.getElementById('gameStatus').classList.add('hidden');
-          document.getElementById('starterPlayerDisplay').classList.add('hidden');
-
           // Refresh players list
           await this.loadPlayers();
         } catch (error) {
@@ -278,7 +317,6 @@
       setupHostFeatures() {
         // Setup host-specific buttons
         gameClient.setupButton('start', () => this.handleStartGame());
-        gameClient.setupButton('status', () => this.handleGameStatus());
         gameClient.setupButton('reset', () => this.handleReset());
         gameClient.setupButton('reset-words', () => this.handleResetWords());
         gameClient.setupButton('leave-btn', () => this.handleLeave());
@@ -286,21 +324,17 @@
         // Listen for real-time updates
         window.addEventListener('game:playersUpdated', (e) => {
           this.displayPlayers(e.detail);
+          this.handleGameStatus(); // Refresh status info
         });
 
         window.addEventListener('game:started', (e) => {
-          const result = e.detail;
-          const starterDisplay = document.getElementById('starterPlayerDisplay');
-          const starterText = document.getElementById('starterPlayerText');
-          starterText.textContent = `🎯 Comienza la partida: ${result.starterPlayer}`;
-          starterDisplay.classList.remove('hidden');
+          this.handleGameStatus(); // Refresh status info
         });
 
         window.addEventListener('game:reset', () => {
           const gameStatus = document.getElementById('gameStatus');
-          const starterDisplay = document.getElementById('starterPlayerDisplay');
           if (gameStatus) gameStatus.classList.add('hidden');
-          if (starterDisplay) starterDisplay.classList.add('hidden');
+          this.handleGameStatus(); // Refresh status info
         });
       }
     }
