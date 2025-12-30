@@ -123,6 +123,7 @@
 
         let html = `
           <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
+          <p><strong>Modo:</strong> ${status.mode === 'automatic' ? '🤖 Automático' : '👤 Manual'}</p>
           <p><strong>Jugadores:</strong> ${status.playerCount}</p>
         `;
 
@@ -140,6 +141,9 @@
 
         contentDiv.innerHTML = html;
         statusDiv.classList.remove('hidden');
+
+        // Initial apply of mode UI
+        applyModeUI(status.mode);
         if (status.started) {
           statusDiv.classList.add('started');
         } else {
@@ -183,6 +187,20 @@
     });
 
     window.addEventListener('game:playersUpdated', () => {
+      updateGameStatusPanel();
+    });
+
+    function applyModeUI(mode) {
+      const wordForm = document.getElementById('wordForm');
+      if (mode === 'automatic') {
+        wordForm.classList.add('hidden');
+      } else {
+        wordForm.classList.remove('hidden');
+      }
+    }
+
+    window.addEventListener('game:settingsUpdated', (e) => {
+      applyModeUI(e.detail.mode);
       updateGameStatusPanel();
     });
   </script>

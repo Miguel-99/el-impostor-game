@@ -34,6 +34,10 @@ class GameClient {
       window.dispatchEvent(new CustomEvent("game:reset", { detail: data }));
       this.showSuccess(`🔄 ${data.message}`);
     });
+
+    this.socket.on("settingsUpdated", (settings) => {
+      window.dispatchEvent(new CustomEvent("game:settingsUpdated", { detail: settings }));
+    });
   }
 
   // WebSocket Wrapper for Promises
@@ -137,6 +141,11 @@ class GameClient {
     return new Promise((resolve) => {
       this.socket.emit('getGameStatus', resolve);
     });
+  }
+
+  async updateSettings(settings) {
+    const response = await this.emitAsync('updateSettings', settings);
+    return response.settings;
   }
 
   // UI Helpers

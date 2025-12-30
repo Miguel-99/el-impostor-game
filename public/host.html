@@ -29,8 +29,25 @@
         <button id="leave-btn" class="btn-danger btn-sm">🚪 Salir</button>
       </div>
 
+      <!-- Game Settings -->
+      <div class="form-group settings-section">
+        <h2>⚙️ Configuración de Partida</h2>
+        <div class="settings-controls">
+          <label class="toggle-container">
+            <span>Modo de Juego:</span>
+            <div class="mode-toggle">
+              <button id="mode-manual" class="mode-btn active">Manual</button>
+              <button id="mode-auto" class="mode-btn">Automático</button>
+            </div>
+          </label>
+          <p id="mode-description" class="text-sm italic text-gray mt-5">
+            Los jugadores deben ingresar sus propias palabras.
+          </p>
+        </div>
+      </div>
+
       <!-- Player Management -->
-      <div class="form-group">
+      <div id="word-section" class="form-group">
         <h2>👥 Gestión de Jugadores</h2>
 
         <form id="wordForm">
@@ -250,6 +267,7 @@
 
           let html = `
             <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
+            <p><strong>Modo:</strong> ${status.mode === 'automatic' ? '🤖 Automático' : '👤 Manual'}</p>
             <p><strong>Jugadores:</strong> ${status.playerCount}</p>
             <p><strong>Palabras:</strong> ${status.wordsCount}</p>
             ${status.starterPlayer ? `<p><strong>Jugador inicial:</strong> ${status.starterPlayer}</p>` : ''}
@@ -314,6 +332,34 @@
         }
       }
 
+      async updateMode(mode) {
+        try {
+          await gameClient.updateSettings({ mode });
+          // UI UI updates via 'game:settingsUpdated'
+        } catch (error) {
+          gameClient.showError(error);
+        }
+      }
+
+      applySettingsUI(settings) {
+        const wordSection = document.getElementById('word-section');
+        const manualBtn = document.getElementById('mode-manual');
+        const autoBtn = document.getElementById('mode-auto');
+        const desc = document.getElementById('mode-description');
+
+        if (settings.mode === 'automatic') {
+          wordSection.classList.add('hidden');
+          autoBtn.classList.add('active');
+          manualBtn.classList.remove('active');
+          desc.textContent = "El juego elegirá una palabra aleatoria de una lista predefinida.";
+        } else {
+          wordSection.classList.remove('hidden');
+          manualBtn.classList.add('active');
+          autoBtn.classList.remove('active');
+          desc.textContent = "Los jugadores deben ingresar sus propias palabras.";
+        }
+      }
+
       setupHostFeatures() {
         // Setup host-specific buttons
         gameClient.setupButton('start', () => this.handleStartGame());
@@ -321,10 +367,18 @@
         gameClient.setupButton('reset-words', () => this.handleResetWords());
         gameClient.setupButton('leave-btn', () => this.handleLeave());
 
+        gameClient.setupButton('mode-manual', () => this.updateMode('manual'));
+        gameClient.setupButton('mode-auto', () => this.updateMode('automatic'));
+
         // Listen for real-time updates
         window.addEventListener('game:playersUpdated', (e) => {
           this.displayPlayers(e.detail);
           this.handleGameStatus(); // Refresh status info
+        });
+
+        window.addEventListener('game:settingsUpdated', (e) => {
+          this.applySettingsUI(e.detail);
+          this.handleGameStatus();
         });
 
         window.addEventListener('game:started', (e) => {

@@ -403,3 +403,58 @@ button:disabled {
 .align-center {
   align-items: center;
 }
+
+/* Mode Toggle Styles */
+.settings-section {
+  background: #fdf2f8;
+  border: 2px solid #fbcfe8;
+  padding: 15px;
+  border-radius: 10px;
+}
+
+.mode-toggle {
+  display: flex;
+  background: #e2e8f0;
+  padding: 4px;
+  border-radius: 10px;
+  width: fit-content;
+  margin: 10px 0;
+}
+
+.mode-btn {
+  background: transparent;
+  color: #4a5568;
+  min-width: 100px;
+  padding: 8px 16px;
+  margin: 0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.mode-btn:hover {
+  transform: none;
+  box-shadow: none;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.mode-btn.active {
+  background: white;
+  color: #764ba2;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.italic {
+  font-style: italic;
+}
+
+.text-gray {
+  color: #718096;
+}
+
+.mt-5 {
+  margin-top: 5px;
+}

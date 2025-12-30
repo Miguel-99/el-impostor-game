@@ -2,6 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const path = require("path");
 const http = require("http");
+const fs = require("fs");
 const { Server } = require("socket.io");
 
 const app = express();
@@ -22,6 +23,31 @@ class GameState {
     this.impostorName = null;
     this.words = [];
     this.started = false;
+    this.mode = 'manual'; // 'manual' or 'automatic'
+    this.wordPool = this.loadWordPool();
+  }
+
+  loadWordPool() {
+    try {
+      const filePath = path.join(__dirname, 'words.txt');
+      if (fs.existsSync(filePath)) {
+        const data = fs.readFileSync(filePath, 'utf-8');
+        return data.split('\n')
+          .map(word => word.trim())
+          .filter(word => word !== '');
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading word pool:', error);
+      return [];
+    }
+  }
+
+  setSettings(settings) {
+    if (settings.mode) {
+      this.mode = settings.mode;
+    }
+    return { mode: this.mode };
   }
 
   addPlayer(name) {
@@ -94,18 +120,32 @@ class GameState {
       throw new Error('Se necesitan al menos 2 jugadores para iniciar');
     }
 
-    const playersWithWords = this.players.filter(p => p.word);
-    if (playersWithWords.length === 0) {
-      throw new Error('Se necesita al menos una palabra para iniciar');
+    if (this.mode === 'manual') {
+      const playersWithWords = this.players.filter(p => p.word);
+      if (playersWithWords.length === 0) {
+        throw new Error('Se necesita al menos una palabra para iniciar');
+      }
     }
 
     if (this.started) {
       throw new Error('La partida ya ha comenzado');
     }
 
-    // Seleccionar palabra común de las palabras disponibles
-    const randomWordIndex = Math.floor(Math.random() * playersWithWords.length);
-    this.commonWord = playersWithWords[randomWordIndex].word;
+    if (this.mode === 'automatic') {
+      if (this.wordPool.length === 0) {
+        throw new Error('El pozo de palabras está vacío. Verifica words.txt');
+      }
+      const randomWordIndex = Math.floor(Math.random() * this.wordPool.length);
+      this.commonWord = this.wordPool[randomWordIndex];
+    } else {
+      // Seleccionar palabra común de las palabras disponibles (Manual)
+      const playersWithWords = this.players.filter(p => p.word);
+      if (playersWithWords.length === 0) {
+        throw new Error('Se necesita al menos una palabra para iniciar en modo manual');
+      }
+      const randomWordIndex = Math.floor(Math.random() * playersWithWords.length);
+      this.commonWord = playersWithWords[randomWordIndex].word;
+    }
 
     // Seleccionar jugador que inicia
     const starterPlayerIndex = Math.floor(Math.random() * this.players.length);
@@ -256,6 +296,16 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("updateSettings", (settings, callback) => {
+    try {
+      const newSettings = gameState.setSettings(settings);
+      io.emit("settingsUpdated", newSettings);
+      if (callback) callback({ success: true, settings: newSettings });
+    } catch (error) {
+      if (callback) callback({ success: false, error: error.message });
+    }
+  });
+
   socket.on("resetGame", (callback) => {
     gameState.reset();
     io.emit("gameReset", { message: "Juego reseteado completamente" });
@@ -286,7 +336,8 @@ io.on("connection", (socket) => {
         playerCount: gameState.players.length,
         wordsCount: gameState.words.length,
         hasCommonWord: !!gameState.commonWord,
-        starterPlayer: gameState.starterPlayer
+        starterPlayer: gameState.starterPlayer,
+        mode: gameState.mode
       });
     }
   });
