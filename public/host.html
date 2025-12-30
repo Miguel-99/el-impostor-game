@@ -269,9 +269,7 @@
             <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
             <p><strong>Modo:</strong> ${status.mode === 'automatic' ? '🤖 Automático' : '👤 Manual'}</p>
             <p><strong>Jugadores:</strong> ${status.playerCount}</p>
-            <p><strong>Palabras:</strong> ${status.wordsCount}</p>
             ${status.starterPlayer ? `<p><strong>Jugador inicial:</strong> ${status.starterPlayer}</p>` : ''}
-            ${status.hasCommonWord ? '<p><strong>Palabra común:</strong> ✅ Seleccionada</p>' : '<p><strong>Palabra común:</strong> ❌ No seleccionada</p>'}
           `;
 
           if (playerState) {
