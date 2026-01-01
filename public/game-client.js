@@ -18,6 +18,15 @@ class GameClient {
     this.playerName = name;
   }
 
+  getStoredSessionId() {
+    return localStorage.getItem("sessionId") || "";
+  }
+
+  setStoredSessionId(id) {
+    localStorage.setItem("sessionId", id);
+    this.sessionId = id;
+  }
+
   // Socket Logic
   setupSocketListeners() {
     this.socket.on("playersUpdated", (players) => {
@@ -66,8 +75,15 @@ class GameClient {
     }
 
     const trimmedName = name.trim();
-    const response = await this.emitAsync('join', trimmedName);
+    const sessionId = this.getStoredSessionId();
+
+    const response = await this.emitAsync('join', { name: trimmedName, sessionId });
+
     this.setStoredPlayerName(trimmedName);
+    if (response.player.sessionId) {
+      this.setStoredSessionId(response.player.sessionId);
+    }
+
     this.isJoined = true;
     if (this.onStateChange) this.onStateChange('joined', trimmedName);
     return response.player;
@@ -85,6 +101,7 @@ class GameClient {
       ]).catch(err => console.warn('Leave notification error:', err));
     } finally {
       this.setStoredPlayerName("");
+      this.setStoredSessionId("");
       this.isJoined = false;
       if (this.onStateChange) {
         this.onStateChange('left', oldName);
@@ -243,6 +260,15 @@ window.gameClient = new GameClient();
 // Auto-initialize
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
+    // Attempt automatic re-join
+    const storedName = window.gameClient.getStoredPlayerName();
+    const storedSession = window.gameClient.getStoredSessionId();
+    if (storedName && storedSession) {
+      console.log(`Intentando re-unirse automáticamente como ${storedName}...`);
+      window.gameClient.joinGame(storedName).catch(err => {
+        console.warn("No se pudo re-unir automáticamente:", err.message);
+      });
+    }
     window.gameClient.initializeCommonFeatures();
   });
 } else {

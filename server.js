@@ -50,20 +50,27 @@ class GameState {
     return { mode: this.mode };
   }
 
-  addPlayer(name) {
+  addPlayer(name, sessionId = null) {
     if (!name || typeof name !== 'string' || name.trim() === '') {
       throw new Error('Nombre inválido');
     }
 
     const trimmedName = name.trim();
-    if (this.players.some(player => player.name === trimmedName)) {
+    const existingPlayer = this.players.find(player => player.name === trimmedName);
+
+    if (existingPlayer) {
+      if (sessionId && existingPlayer.sessionId === sessionId) {
+        // Allow re-join if sessionId matches
+        return existingPlayer;
+      }
       throw new Error('Ya existe un usuario en partida con ese nombre');
     }
 
     const newPlayer = {
       id: this.players.length + 1,
       name: trimmedName,
-      word: null
+      word: null,
+      sessionId: sessionId || Math.random().toString(36).substring(2, 15)
     };
 
     this.players.push(newPlayer);
@@ -238,11 +245,11 @@ app.use(express.static("public"));
 io.on("connection", (socket) => {
   console.log("A user connected:", socket.id);
 
-  socket.on("join", (name, callback) => {
+  socket.on("join", ({ name, sessionId }, callback) => {
     try {
-      const newPlayer = gameState.addPlayer(name);
+      const player = gameState.addPlayer(name, sessionId);
       io.emit("playersUpdated", gameState.getPlayers());
-      if (callback) callback({ success: true, player: newPlayer });
+      if (callback) callback({ success: true, player });
     } catch (error) {
       if (callback) callback({ success: false, error: error.message });
     }
