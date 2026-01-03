@@ -20,7 +20,8 @@ class GameState {
     this.players = [];
     this.commonWord = null;
     this.starterPlayer = null;
-    this.impostorName = null;
+    this.impostorNames = [];
+    this.impostorCount = 1;
     this.words = [];
     this.started = false;
     this.mode = 'manual'; // 'manual', 'automatic', or 'local'
@@ -47,7 +48,10 @@ class GameState {
     if (settings.mode) {
       this.mode = settings.mode;
     }
-    return { mode: this.mode };
+    if (settings.impostorCount !== undefined) {
+      this.impostorCount = parseInt(settings.impostorCount) || 1;
+    }
+    return { mode: this.mode, impostorCount: this.impostorCount };
   }
 
   addPlayer(name, sessionId = null) {
@@ -123,17 +127,22 @@ class GameState {
   }
 
   startGame() {
-    if (this.players.length < 2) {
-      throw new Error('Se necesitan al menos 2 jugadores para iniciar');
+    if (this.players.length < 3 && this.impostorCount >= this.players.length) {
+      throw new Error('Se necesitan más jugadores para esa cantidad de impostores');
+    }
+
+    if (this.impostorCount >= this.players.length) {
+      throw new Error('No pueden ser todos impostores');
     }
 
     if (this.started) {
       throw new Error('La partida ya ha comenzado');
     }
 
-    // Primero elegimos un candidato a impostor
-    let impostorIndex = Math.floor(Math.random() * this.players.length);
-    this.impostorName = this.players[impostorIndex].name;
+    // Shuffled names to pick impostors
+    const playerNames = this.players.map(p => p.name);
+    const shuffledNames = [...playerNames].sort(() => Math.random() - 0.5);
+    this.impostorNames = shuffledNames.slice(0, this.impostorCount);
 
     if (this.mode === 'manual') {
       const allPlayersWithWords = this.players.filter(p => p.word);
@@ -141,17 +150,23 @@ class GameState {
         throw new Error('Se necesita al menos una palabra para iniciar en modo manual');
       }
 
-      // Filtrar palabras que NO sean del impostor
-      let wordCandidates = allPlayersWithWords.filter(p => p.name !== this.impostorName);
+      // Filtrar palabras de jugadores que NO sean impostores
+      let wordCandidates = allPlayersWithWords.filter(p => !this.impostorNames.includes(p.name));
 
       if (wordCandidates.length === 0) {
-        // Solo el impostor elegido tiene palabra. Debemos cambiar al impostor.
-        // Buscamos a alguien que no sea él para ser el nuevo impostor.
-        const otherPlayers = this.players.filter(p => p.name !== this.impostorName);
-        if (otherPlayers.length > 0) {
-          this.impostorName = otherPlayers[Math.floor(Math.random() * otherPlayers.length)].name;
-          // Ahora recalculamos los candidatos a palabra (que ahora incluirá al anterior impostor)
-          wordCandidates = allPlayersWithWords.filter(p => p.name !== this.impostorName);
+        // Ninguno de los inocentes tiene palabra. 
+        // Intentamos reasignar los roles de impostor entre los que NO tienen palabra
+        // para asegurar que al menos un inocente tenga palabra.
+        const playersWithWords = allPlayersWithWords.map(p => p.name);
+        const playersWithoutWords = this.players.filter(p => !p.word).map(p => p.name);
+
+        if (playersWithoutWords.length >= this.impostorCount) {
+          // Podemos elegir los impostores de entre los que no tienen palabra
+          const shuffledNoWord = [...playersWithoutWords].sort(() => Math.random() - 0.5);
+          this.impostorNames = shuffledNoWord.slice(0, this.impostorCount);
+          wordCandidates = allPlayersWithWords; // Ahora todos los que tienen palabra son inocentes
+        } else {
+          throw new Error('No hay suficientes jugadores con palabras para asignar roles. Asegúrate de que los inocentes tengan palabras o reduce los impostores.');
         }
       }
 
@@ -177,7 +192,7 @@ class GameState {
       starterPlayer: this.starterPlayer,
       commonWord: this.commonWord,
       totalPlayers: this.players.length,
-      impostorName: this.impostorName // Solo para debugging, no enviar al cliente
+      impostorNames: this.impostorNames // Solo para debugging, no enviar al cliente
     };
   }
 
@@ -188,7 +203,8 @@ class GameState {
       wordsCount: this.words.length,
       hasCommonWord: !!this.commonWord,
       starterPlayer: this.starterPlayer,
-      mode: this.mode
+      mode: this.mode,
+      impostorCount: this.impostorCount
     };
   }
 
@@ -204,7 +220,7 @@ class GameState {
       throw new Error('Jugador no encontrado');
     }
 
-    if (player.name === this.impostorName) {
+    if (this.impostorNames.includes(trimmedName)) {
       return { role: "impostor", name: player.name };
     } else {
       return { role: "player", word: this.commonWord, name: player.name };
@@ -214,7 +230,7 @@ class GameState {
   removeWords() {
     this.commonWord = null;
     this.starterPlayer = null;
-    this.impostorName = null;
+    this.impostorNames = [];
     this.words = [];
     this.started = false;
     this.players.forEach(p => p.word = null);
@@ -304,7 +320,7 @@ io.on("connection", (socket) => {
   socket.on("startGame", (callback) => {
     try {
       const result = gameState.startGame();
-      const { impostorName, ...clientResult } = result;
+      const { impostorNames, ...clientResult } = result;
       io.emit("gameStarted", clientResult);
       if (callback) callback({ success: true, result: clientResult });
     } catch (error) {

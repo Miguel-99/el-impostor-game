@@ -41,6 +41,12 @@
               <button id="mode-local" class="mode-btn">Mismo Dispositivo</button>
             </div>
           </label>
+          <label class="toggle-container mt-20">
+            <span>Cantidad de Impostores:</span>
+            <div class="impostor-selector">
+              <input type="number" id="impostor-count" min="1" max="10" value="1" class="impostor-input">
+            </div>
+          </label>
           <p id="mode-description" class="text-sm italic text-gray mt-5">
             Los jugadores deben ingresar sus propias palabras.
           </p>
@@ -471,9 +477,9 @@
         }
       }
 
-      async updateMode(mode) {
+      async updateSettings(settings) {
         try {
-          await gameClient.updateSettings({ mode });
+          await gameClient.updateSettings(settings);
           // UI UI updates via 'game:settingsUpdated'
         } catch (error) {
           gameClient.showError(error);
@@ -488,12 +494,17 @@
         const localBtn = document.getElementById('mode-local');
         const desc = document.getElementById('mode-description');
         const wordForm = document.getElementById('wordForm');
+        const impostorInput = document.getElementById('impostor-count');
 
         // Reset status
         [manualBtn, autoBtn, localBtn].forEach(b => b.classList.remove('active'));
         wordSection.classList.remove('hidden');
         localEntry.classList.add('hidden');
         wordForm.classList.remove('hidden');
+
+        if (impostorInput) {
+          impostorInput.value = settings.impostorCount || 1;
+        }
 
         if (settings.mode === 'automatic') {
           wordForm.classList.add('hidden');
@@ -517,9 +528,19 @@
         gameClient.setupButton('reset-words', () => this.handleResetWords());
         gameClient.setupButton('leave-btn', () => this.handleLeave());
 
-        gameClient.setupButton('mode-manual', () => this.updateMode('manual'));
-        gameClient.setupButton('mode-auto', () => this.updateMode('automatic'));
-        gameClient.setupButton('mode-local', () => this.updateMode('local'));
+        gameClient.setupButton('mode-manual', () => this.updateSettings({ mode: 'manual' }));
+        gameClient.setupButton('mode-auto', () => this.updateSettings({ mode: 'automatic' }));
+        gameClient.setupButton('mode-local', () => this.updateSettings({ mode: 'local' }));
+
+        const impostorInput = document.getElementById('impostor-count');
+        if (impostorInput) {
+          impostorInput.addEventListener('change', (e) => {
+            const count = parseInt(e.target.value);
+            if (count > 0) {
+              this.updateSettings({ impostorCount: count });
+            }
+          });
+        }
 
         gameClient.setupForm('addLocalPlayerForm', (e, form) => this.handleAddLocalPlayer(e, form));
 
