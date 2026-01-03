@@ -127,40 +127,48 @@ class GameState {
       throw new Error('Se necesitan al menos 2 jugadores para iniciar');
     }
 
-    if (this.mode === 'manual') {
-      const playersWithWords = this.players.filter(p => p.word);
-      if (playersWithWords.length === 0) {
-        throw new Error('Se necesita al menos una palabra para iniciar');
-      }
-    }
-
     if (this.started) {
       throw new Error('La partida ya ha comenzado');
     }
 
-    if (this.mode === 'automatic' || this.mode === 'local') {
+    // Primero elegimos un candidato a impostor
+    let impostorIndex = Math.floor(Math.random() * this.players.length);
+    this.impostorName = this.players[impostorIndex].name;
+
+    if (this.mode === 'manual') {
+      const allPlayersWithWords = this.players.filter(p => p.word);
+      if (allPlayersWithWords.length === 0) {
+        throw new Error('Se necesita al menos una palabra para iniciar en modo manual');
+      }
+
+      // Filtrar palabras que NO sean del impostor
+      let wordCandidates = allPlayersWithWords.filter(p => p.name !== this.impostorName);
+
+      if (wordCandidates.length === 0) {
+        // Solo el impostor elegido tiene palabra. Debemos cambiar al impostor.
+        // Buscamos a alguien que no sea él para ser el nuevo impostor.
+        const otherPlayers = this.players.filter(p => p.name !== this.impostorName);
+        if (otherPlayers.length > 0) {
+          this.impostorName = otherPlayers[Math.floor(Math.random() * otherPlayers.length)].name;
+          // Ahora recalculamos los candidatos a palabra (que ahora incluirá al anterior impostor)
+          wordCandidates = allPlayersWithWords.filter(p => p.name !== this.impostorName);
+        }
+      }
+
+      const randomWordIndex = Math.floor(Math.random() * wordCandidates.length);
+      this.commonWord = wordCandidates[randomWordIndex].word;
+    } else {
+      // Modo automático o local
       if (this.wordPool.length === 0) {
         throw new Error('El pozo de palabras está vacío. Verifica words.txt');
       }
       const randomWordIndex = Math.floor(Math.random() * this.wordPool.length);
       this.commonWord = this.wordPool[randomWordIndex];
-    } else {
-      // Seleccionar palabra común de las palabras disponibles (Manual)
-      const playersWithWords = this.players.filter(p => p.word);
-      if (playersWithWords.length === 0) {
-        throw new Error('Se necesita al menos una palabra para iniciar en modo manual');
-      }
-      const randomWordIndex = Math.floor(Math.random() * playersWithWords.length);
-      this.commonWord = playersWithWords[randomWordIndex].word;
     }
 
     // Seleccionar jugador que inicia
     const starterPlayerIndex = Math.floor(Math.random() * this.players.length);
     this.starterPlayer = this.players[starterPlayerIndex].name;
-
-    // Seleccionar impostor
-    const impostorIndex = Math.floor(Math.random() * this.players.length);
-    this.impostorName = this.players[impostorIndex].name;
 
     this.started = true;
 
