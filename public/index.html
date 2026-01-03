@@ -123,7 +123,7 @@
 
         let html = `
           <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
-          <p><strong>Modo:</strong> ${status.mode === 'automatic' ? '🤖 Automático' : '👤 Manual'}</p>
+          <p><strong>Modo:</strong> ${status.mode === 'automatic' ? '🤖 Automático' : '👤 Manual'}${status.mode === 'local' ? ' 🏠 Local' : ''}</p>
           <p><strong>Jugadores:</strong> ${status.playerCount}</p>
         `;
 
@@ -135,8 +135,20 @@
           }
         }
 
-        if (status.starterPlayer) {
-          html += `<p><strong>Empieza:</strong> ${status.starterPlayer}</p>`;
+        if (status.started && status.starterPlayer) {
+          // Calculate play order
+          const players = await gameClient.getPlayers();
+          const starterIndex = players.findIndex(p => p.name === status.starterPlayer);
+
+          if (starterIndex !== -1) {
+            const order = [];
+            for (let i = 0; i < players.length; i++) {
+              order.push(players[(starterIndex + i) % players.length].name);
+            }
+            html += `<p><strong>Orden de juego:</strong><br> ${order.join(' ➡️ ')}</p>`;
+          } else {
+            html += `<p><strong>Empieza:</strong> ${status.starterPlayer}</p>`;
+          }
         }
 
         contentDiv.innerHTML = html;

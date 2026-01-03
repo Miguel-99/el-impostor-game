@@ -23,7 +23,7 @@ class GameState {
     this.impostorName = null;
     this.words = [];
     this.started = false;
-    this.mode = 'manual'; // 'manual' or 'automatic'
+    this.mode = 'manual'; // 'manual', 'automatic', or 'local'
     this.wordPool = this.loadWordPool();
   }
 
@@ -138,7 +138,7 @@ class GameState {
       throw new Error('La partida ya ha comenzado');
     }
 
-    if (this.mode === 'automatic') {
+    if (this.mode === 'automatic' || this.mode === 'local') {
       if (this.wordPool.length === 0) {
         throw new Error('El pozo de palabras está vacío. Verifica words.txt');
       }
@@ -170,6 +170,17 @@ class GameState {
       commonWord: this.commonWord,
       totalPlayers: this.players.length,
       impostorName: this.impostorName // Solo para debugging, no enviar al cliente
+    };
+  }
+
+  getGameStatus() {
+    return {
+      started: this.started,
+      playerCount: this.players.length,
+      wordsCount: this.words.length,
+      hasCommonWord: !!this.commonWord,
+      starterPlayer: this.starterPlayer,
+      mode: this.mode
     };
   }
 
@@ -338,14 +349,7 @@ io.on("connection", (socket) => {
 
   socket.on("getGameStatus", (callback) => {
     if (callback) {
-      callback({
-        started: gameState.started,
-        playerCount: gameState.players.length,
-        wordsCount: gameState.words.length,
-        hasCommonWord: !!gameState.commonWord,
-        starterPlayer: gameState.starterPlayer,
-        mode: gameState.mode
-      });
+      callback(gameState.getGameStatus());
     }
   });
 

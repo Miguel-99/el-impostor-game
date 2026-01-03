@@ -38,6 +38,7 @@
             <div class="mode-toggle">
               <button id="mode-manual" class="mode-btn active">Manual</button>
               <button id="mode-auto" class="mode-btn">Automático</button>
+              <button id="mode-local" class="mode-btn">Mismo Dispositivo</button>
             </div>
           </label>
           <p id="mode-description" class="text-sm italic text-gray mt-5">
@@ -49,6 +50,17 @@
       <!-- Player Management -->
       <div id="word-section" class="form-group">
         <h2>👥 Gestión de Jugadores</h2>
+
+        <!-- Local player entry form -->
+        <div id="local-player-entry" class="hidden">
+          <form id="addLocalPlayerForm">
+            <div class="form-group">
+              <label for="local-name">Nombre del jugador:</label>
+              <input type="text" id="local-name" name="name" placeholder="Ej: Juan" required />
+            </div>
+            <button type="submit" class="btn-success">➕ Añadir Jugador</button>
+          </form>
+        </div>
 
         <form id="wordForm">
           <div class="form-group">
@@ -87,6 +99,22 @@
     <div id="gameStatus" class="game-status hidden">
       <h3>📊 Estado del juego:</h3>
       <div id="statusContent"></div>
+    </div>
+
+    <!-- Reveal Sequence UI -->
+    <div id="reveal-view" class="hidden">
+      <div id="reveal-card" class="reveal-card">
+        <h2 id="reveal-player-title">Turno de [Nombre]</h2>
+        <div id="reveal-content" class="reveal-content-box hidden">
+          <p id="reveal-role">Rol: [Rol]</p>
+          <p id="reveal-word-box">Palabra: <strong id="reveal-word"></strong></p>
+        </div>
+        <div class="reveal-controls">
+          <button id="reveal-btn" class="btn-primary">👁️ Revelar</button>
+          <button id="next-player-btn" class="btn-success hidden">➡️ Siguiente Jugador</button>
+          <button id="finish-reveal-btn" class="btn-success hidden">🏁 Finalizar y Jugar</button>
+        </div>
+      </div>
     </div>
 
     <!-- Messages -->
@@ -249,6 +277,101 @@
         }
       }
 
+      async handleAddLocalPlayer(e, form) {
+        const formData = new FormData(form);
+        const name = formData.get('name');
+        try {
+          await gameClient.emitAsync('join', { name });
+          form.reset();
+          // UI updates via 'game:playersUpdated'
+        } catch (error) {
+          gameClient.showError(error);
+        }
+      }
+
+      async startRevealSequence() {
+        try {
+          const status = await gameClient.getGameStatus();
+          const players = await gameClient.getPlayers();
+          const starterIndex = players.findIndex(p => p.name === status.starterPlayer);
+
+          if (starterIndex !== -1) {
+            const orderedPlayers = [];
+            for (let i = 0; i < players.length; i++) {
+              orderedPlayers.push(players[(starterIndex + i) % players.length]);
+            }
+            this.revealPlayers = orderedPlayers;
+          } else {
+            this.revealPlayers = [...players];
+          }
+
+          this.currentRevealIndex = 0;
+          this.showRevealStep();
+        } catch (error) {
+          gameClient.showError(error);
+        }
+      }
+
+      async showRevealStep() {
+        const player = this.revealPlayers[this.currentRevealIndex];
+        if (!player) return;
+
+        try {
+          const state = await gameClient.getPlayerState(player.name);
+
+          const revealView = document.getElementById('reveal-view');
+          const title = document.getElementById('reveal-player-title');
+          const content = document.getElementById('reveal-content');
+          const roleText = document.getElementById('reveal-role');
+          const wordBox = document.getElementById('reveal-word-box');
+          const wordText = document.getElementById('reveal-word');
+          const revealBtn = document.getElementById('reveal-btn');
+          const nextBtn = document.getElementById('next-player-btn');
+          const finishBtn = document.getElementById('finish-reveal-btn');
+
+          title.textContent = `Turno de: ${player.name}`;
+          roleText.textContent = state.role === 'impostor' ? '👺 ERES EL IMPOSTOR' : '😇 ERES INOCENTE';
+          roleText.className = state.role === 'impostor' ? 'role-info warning' : 'role-info success';
+
+          if (state.role === 'player') {
+            wordBox.classList.remove('hidden');
+            wordText.textContent = state.word;
+          } else {
+            wordBox.classList.add('hidden');
+          }
+
+          content.classList.add('hidden');
+          revealBtn.classList.remove('hidden');
+          nextBtn.classList.add('hidden');
+          finishBtn.classList.add('hidden');
+          revealView.classList.remove('hidden');
+
+          // Setup reveal click
+          revealBtn.onclick = () => {
+            content.classList.remove('hidden');
+            revealBtn.classList.add('hidden');
+            if (this.currentRevealIndex < this.revealPlayers.length - 1) {
+              nextBtn.classList.remove('hidden');
+            } else {
+              finishBtn.classList.remove('hidden');
+            }
+          };
+
+          nextBtn.onclick = () => {
+            this.currentRevealIndex++;
+            this.showRevealStep();
+          };
+
+          finishBtn.onclick = () => {
+            revealView.classList.add('hidden');
+            this.handleGameStatus();
+          };
+
+        } catch (error) {
+          gameClient.showError(error);
+        }
+      }
+
       async handleGameStatus() {
         try {
           const name = gameClient.playerName;
@@ -267,10 +390,28 @@
 
           let html = `
             <p><strong>Estado:</strong> ${status.started ? '🟢 Iniciado' : '🔴 No iniciado'}</p>
-            <p><strong>Modo:</strong> ${status.mode === 'automatic' ? '🤖 Automático' : '👤 Manual'}</p>
+            <p><strong>Modo:</strong> ${status.mode === 'automatic' ? '🤖 Automático' :
+              status.mode === 'manual' ? '👤 Manual' :
+                status.mode === 'local' ? '🤖 Automático + 🏠 Local' : 'Desconocido'
+            }</p>
             <p><strong>Jugadores:</strong> ${status.playerCount}</p>
-            ${status.starterPlayer ? `<p><strong>Jugador inicial:</strong> ${status.starterPlayer}</p>` : ''}
           `;
+
+          if (status.started && status.starterPlayer) {
+            // Calculate play order
+            const players = await gameClient.getPlayers();
+            const starterIndex = players.findIndex(p => p.name === status.starterPlayer);
+
+            if (starterIndex !== -1) {
+              const order = [];
+              for (let i = 0; i < players.length; i++) {
+                order.push(players[(starterIndex + i) % players.length].name);
+              }
+              html += `<p><strong>Orden de juego:</strong><br> ${order.join(' ➡️ ')}</p>`;
+            } else {
+              html += `<p><strong>Empieza:</strong> ${status.starterPlayer}</p>`;
+            }
+          }
 
           if (playerState) {
             if (playerState.role === 'impostor') {
@@ -341,19 +482,30 @@
 
       applySettingsUI(settings) {
         const wordSection = document.getElementById('word-section');
+        const localEntry = document.getElementById('local-player-entry');
         const manualBtn = document.getElementById('mode-manual');
         const autoBtn = document.getElementById('mode-auto');
+        const localBtn = document.getElementById('mode-local');
         const desc = document.getElementById('mode-description');
+        const wordForm = document.getElementById('wordForm');
+
+        // Reset status
+        [manualBtn, autoBtn, localBtn].forEach(b => b.classList.remove('active'));
+        wordSection.classList.remove('hidden');
+        localEntry.classList.add('hidden');
+        wordForm.classList.remove('hidden');
 
         if (settings.mode === 'automatic') {
-          wordSection.classList.add('hidden');
+          wordForm.classList.add('hidden');
           autoBtn.classList.add('active');
-          manualBtn.classList.remove('active');
           desc.textContent = "El juego elegirá una palabra aleatoria de una lista predefinida.";
+        } else if (settings.mode === 'local') {
+          wordForm.classList.add('hidden');
+          localEntry.classList.remove('hidden');
+          localBtn.classList.add('active');
+          desc.textContent = "Juega en un único dispositivo, la selección de palabra es automática y agregarás los jugadores uno por uno.";
         } else {
-          wordSection.classList.remove('hidden');
           manualBtn.classList.add('active');
-          autoBtn.classList.remove('active');
           desc.textContent = "Los jugadores deben ingresar sus propias palabras.";
         }
       }
@@ -367,6 +519,9 @@
 
         gameClient.setupButton('mode-manual', () => this.updateMode('manual'));
         gameClient.setupButton('mode-auto', () => this.updateMode('automatic'));
+        gameClient.setupButton('mode-local', () => this.updateMode('local'));
+
+        gameClient.setupForm('addLocalPlayerForm', (e, form) => this.handleAddLocalPlayer(e, form));
 
         // Listen for real-time updates
         window.addEventListener('game:playersUpdated', (e) => {
@@ -381,6 +536,9 @@
 
         window.addEventListener('game:started', (e) => {
           this.handleGameStatus(); // Refresh status info
+          if (gameClient.currentSettings?.mode === 'local' || document.getElementById('mode-local').classList.contains('active')) {
+            this.startRevealSequence();
+          }
         });
 
         window.addEventListener('game:reset', () => {
